@@ -11,7 +11,7 @@ type Props = {
   pricePerPerson: number;
   maxGuests: number;
   viewer: "guest" | "owner" | "customer";
-  existingStatus: "REQUESTED" | "ACCEPTED" | "DECLINED" | null;
+  existingStatus: "REQUESTED" | "ACCEPTED" | null;
 };
 
 const ticketClass = "rounded-2xl border-2 border-dashed border-leaf bg-cream p-5 shadow-sm";
@@ -151,21 +151,15 @@ export default function BookingForm({
         <h2 className="text-xl font-bold">
           {existingStatus === "REQUESTED" && "Request sent"}
           {existingStatus === "ACCEPTED" && "Booking accepted"}
-          {existingStatus === "DECLINED" && "Request declined"}
         </h2>
         <p className="mt-1 text-ink/80">
           {existingStatus === "REQUESTED" &&
             `You've already sent a request to ${chefName}. They'll accept or decline it soon. Track it under My bookings.`}
           {existingStatus === "ACCEPTED" &&
             `${chefName} accepted your request. You can see the details and their phone number under My bookings.`}
-          {existingStatus === "DECLINED" &&
-            `${chefName} declined your earlier request, so you can't send another one to this chef. Try another chef.`}
         </p>
-        <Link
-          href={existingStatus === "DECLINED" ? "/chefs" : "/bookings"}
-          className={`${outlineButton} mt-4 w-full`}
-        >
-          {existingStatus === "DECLINED" ? "Find another chef" : "Go to My bookings"}
+        <Link href="/bookings" className={`${outlineButton} mt-4 w-full`}>
+          Go to My bookings
         </Link>
       </section>
     );

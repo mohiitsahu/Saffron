@@ -64,7 +64,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
 
   const viewer = !session?.user ? "guest" : session.user.id === chef.userId ? "owner" : "customer";
 
-  // A pending, accepted or declined request blocks sending another one to the same chef.
+  // A pending or accepted request blocks sending another one to the same chef.
   const customerId = viewer === "customer" ? session?.user.id : undefined;
   const existing = customerId
     ? await prisma.booking.findFirst({
@@ -77,9 +77,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
       })
     : null;
   const existingStatus =
-    existing && (existing.status === "REQUESTED" || existing.status === "ACCEPTED" || existing.status === "DECLINED")
-      ? existing.status
-      : null;
+    existing && (existing.status === "REQUESTED" || existing.status === "ACCEPTED") ? existing.status : null;
 
   const avg = agg._avg.rating;
   const count = agg._count._all;

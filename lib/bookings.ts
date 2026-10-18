@@ -99,7 +99,7 @@ export function serializeBooking(booking: BookingRow, viewerId: string): Booking
   };
 }
 
-export type BookingAction = "accept" | "cancel" | "complete";
+export type BookingAction = "accept" | "decline" | "cancel" | "complete";
 
 type Transition =
   | { ok: true; status: BookingStatus }
@@ -109,7 +109,9 @@ function fail(httpStatus: number, error: string): Transition {
   return { ok: false, error, httpStatus };
 }
 
-// REQUESTED -> ACCEPTED -> COMPLETED. Either side can cancel a requested or accepted booking.
+// REQUESTED -> ACCEPTED -> COMPLETED.
+// Chef: accepts or declines a new request, then can cancel or complete an accepted booking.
+// Customer: can cancel (withdraw) a requested or accepted booking.
 export function resolveTransition(
   action: BookingAction,
   booking: { status: BookingStatus; eventDate: Date },
@@ -127,13 +129,25 @@ export function resolveTransition(
       }
       return { ok: true, status: "ACCEPTED" };
     }
+    case "decline": {
+      if (role !== "chef") return fail(403, "Only the chef can decline a request.");
+      if (booking.status !== "REQUESTED") {
+        return fail(409, "This request has already been answered or cancelled.");
+      }
+      return { ok: true, status: "DECLINED" };
+    }
     case "cancel": {
       if (booking.status !== "REQUESTED" && booking.status !== "ACCEPTED") {
         return fail(409, "Only requested or accepted bookings can be cancelled.");
       }
+      // A chef answers a new request with Accept or Decline. Cancel is only for accepted bookings.
+      if (role === "chef" && booking.status === "REQUESTED") {
+        return fail(409, "Decline this request instead of cancelling it.");
+      }
       return { ok: true, status: "CANCELLED" };
     }
     case "complete": {
+      if (role !== "chef") return fail(403, "Only the chef can mark a booking as completed.");
       if (booking.status !== "ACCEPTED") {
         return fail(409, "Only accepted bookings can be marked as completed.");
       }

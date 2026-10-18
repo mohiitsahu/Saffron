@@ -64,8 +64,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "You can't book your own profile." }, { status: 400 });
   }
 
-  // One request per chef: pending, accepted and declined requests all block a new one.
-  // Completed and cancelled bookings don't, so customers can book a chef again later.
+  // One open request per chef: only pending or accepted requests block a new one.
+  // Declined, completed and cancelled bookings don't, so customers can book a chef again.
   const existing = await prisma.booking.findFirst({
     where: {
       customerId: userId,
@@ -78,9 +78,7 @@ export async function POST(req: Request) {
     const message =
       existing.status === "REQUESTED"
         ? "You already have a pending request with this chef. Check My bookings for their answer."
-        : existing.status === "ACCEPTED"
-          ? "You already have an accepted booking with this chef. See it under My bookings."
-          : "This chef declined your earlier request, so you can't send another one.";
+        : "You already have an accepted booking with this chef. See it under My bookings.";
     return NextResponse.json({ error: message }, { status: 409 });
   }
 

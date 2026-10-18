@@ -102,7 +102,7 @@ export const bookingCreateSchema = z.object({
 });
 
 export const bookingActionSchema = z.object({
-  action: z.enum(["accept", "cancel", "complete"]),
+  action: z.enum(["accept", "decline", "cancel", "complete"]),
 });
 
 export type ChefProfileInput = z.infer<typeof chefProfileSchema>;

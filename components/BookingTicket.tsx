@@ -32,9 +32,14 @@ export default function BookingTicket({
   const [error, setError] = useState("");
 
   const isChef = booking.role === "chef";
-  const canAnswer = isChef && booking.status === "REQUESTED";
-  const canCancel = booking.status === "REQUESTED" || booking.status === "ACCEPTED";
-  const canComplete = booking.status === "ACCEPTED" && booking.eventPassed;
+  const isRequested = booking.status === "REQUESTED";
+  const isAccepted = booking.status === "ACCEPTED";
+  // Chef: answers a new request with Accept or Decline, then can cancel or complete once accepted.
+  // Customer: can cancel (withdraw) a requested or accepted booking.
+  const canAccept = isChef && isRequested && !booking.eventPassed;
+  const canDecline = isChef && isRequested;
+  const canCancel = isChef ? isAccepted : isRequested || isAccepted;
+  const canComplete = isChef && isAccepted && booking.eventPassed;
   const status = STATUS[booking.status];
   const shortId = booking.id.slice(-6).toUpperCase();
   const roleLabel = isChef ? "Customer: " : "Chef: ";
@@ -51,7 +56,7 @@ export default function BookingTicket({
     cancelledText ? ` · ${cancelledText}` : ""
   }`;
 
-  async function act(action: "accept" | "cancel" | "complete", confirmText?: string) {
+  async function act(action: "accept" | "decline" | "cancel" | "complete", confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true);
     setError("");
@@ -76,7 +81,10 @@ export default function BookingTicket({
 
   const cancelConfirm = isChef
     ? "Cancel this booking? The customer will see that you cancelled it."
-    : "Cancel this booking?";
+    : isRequested
+      ? "Cancel this request?"
+      : "Cancel this booking?";
+  const declineConfirm = "Decline this request? The customer will see that you declined it.";
 
   const body = (
     <>
@@ -141,9 +149,9 @@ export default function BookingTicket({
         )}
       </div>
 
-      {(canCancel || canComplete) && (
+      {(canAccept || canDecline || canComplete || canCancel) && (
         <div className="mt-4 flex flex-wrap gap-3">
-          {canAnswer && (
+          {canAccept && (
             <button type="button" disabled={busy} onClick={() => act("accept")} className={primaryButton}>
               Accept
             </button>
@@ -153,6 +161,16 @@ export default function BookingTicket({
               Mark as completed
             </button>
           )}
+          {canDecline && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => act("decline", declineConfirm)}
+              className={dangerButton}
+            >
+              Decline
+            </button>
+          )}
           {canCancel && (
             <button
               type="button"
@@ -160,14 +178,24 @@ export default function BookingTicket({
               onClick={() => act("cancel", cancelConfirm)}
               className={dangerButton}
             >
-              {canAnswer ? "Cancel" : "Cancel booking"}
+              {isRequested ? "Cancel request" : "Cancel booking"}
             </button>
           )}
         </div>
       )}
 
-      {booking.status === "ACCEPTED" && !booking.eventPassed && (
-        <p className="mt-3 text-xs text-ink/70">You can mark this completed after the event time.</p>
+      {isChef && isRequested && booking.eventPassed && (
+        <p className="mt-3 text-xs text-ink/70">
+          The event time has passed, so this can&apos;t be accepted. You can decline it.
+        </p>
+      )}
+
+      {isAccepted && !(isChef && booking.eventPassed) && (
+        <p className="mt-3 text-xs text-ink/70">
+          {isChef
+            ? "You can mark this completed after the event time."
+            : "Your chef marks the booking completed after the event, then you can leave a review."}
+        </p>
       )}
 
       {booking.status === "COMPLETED" && booking.reviewRating !== null && (

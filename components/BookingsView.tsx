@@ -83,8 +83,8 @@ function BookingList({ items, perspective }: { items: BookingView[]; perspective
         title={perspective === "chef" ? "Needs your answer" : "Waiting for the chef"}
         hint={
           perspective === "chef"
-            ? "Accept to share your phone number and get the customer's address."
-            : "The chef will accept or cancel soon."
+            ? "Accept to share your phone number and get the customer's address, or decline if you can't take it."
+            : "The chef will accept or decline soon. You can cancel the request until then."
         }
         items={needs}
       />
@@ -112,7 +112,7 @@ export default function BookingsView({
 }) {
   const [tab, setTab] = useState<Tab>(showChefTabs ? initialTab : "mine");
 
-  const waiting = asChef.filter((b) => b.status === "REQUESTED").length;
+  const waiting = asChef.filter((b) => b.status === "REQUESTED" && !b.eventPassed).length;
   const mineOpen = asCustomer.filter(isOpen).length;
 
   const tabClass = (active: boolean) =>
