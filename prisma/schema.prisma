@@ -120,6 +120,7 @@ model Booking {
   customer User    @relation("CustomerBookings", fields: [customerId], references: [id])
   chef     User    @relation("ChefBookings", fields: [chefId], references: [id])
   review   Review?
+  events   BookingEvent[]
 
   @@index([customerId])
   @@index([chefId, status])
@@ -139,4 +140,17 @@ model Review {
   customer User    @relation("ReviewCustomer", fields: [customerId], references: [id])
 
   @@index([chefId])
+}
+
+model BookingEvent {
+  id         String         @id @default(cuid())
+  bookingId  String
+  actorId    String?
+  fromStatus BookingStatus?
+  toStatus   BookingStatus
+  createdAt  DateTime       @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt])
 }

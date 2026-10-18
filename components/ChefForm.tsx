@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CUISINE_OPTIONS, MAX_CUISINES } from "@/lib/cuisines";
 import { inputClass, labelClass, primaryButton } from "@/lib/ui";
 
 export type ChefFormValues = {
   displayName: string;
   bio: string;
   city: string;
-  cuisines: string; // comma separated in the form
+  cuisines: string; // comma separated; the form splits it into chips and an "other" box
   pricePerPerson: string;
   maxGuests: string;
   yearsExperience: string;
@@ -17,6 +18,15 @@ export type ChefFormValues = {
   sampleMenu: string;
   active: boolean;
 };
+
+const PRESETS: readonly string[] = CUISINE_OPTIONS;
+
+function splitCuisines(text: string) {
+  return text
+    .split(",")
+    .map((c) => c.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 function Field({
   label,
@@ -56,12 +66,27 @@ export default function ChefForm({
 }) {
   const router = useRouter();
   const [values, setValues] = useState<ChefFormValues>(initial);
+  const [selected, setSelected] = useState<string[]>(() =>
+    splitCuisines(initial.cuisines).filter((c) => PRESETS.includes(c))
+  );
+  const [custom, setCustom] = useState(() =>
+    splitCuisines(initial.cuisines)
+      .filter((c) => !PRESETS.includes(c))
+      .join(", ")
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const customList = splitCuisines(custom);
+  const totalCuisines = selected.length + customList.length;
+
   function set<K extends keyof ChefFormValues>(key: K, value: ChefFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
+  }
+
+  function toggleCuisine(name: string) {
+    setSelected((list) => (list.includes(name) ? list.filter((c) => c !== name) : [...list, name]));
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -76,10 +101,7 @@ export default function ChefForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...values,
-          cuisines: values.cuisines
-            .split(",")
-            .map((c) => c.trim())
-            .filter(Boolean),
+          cuisines: [...selected, ...customList],
           pricePerPerson: Number(values.pricePerPerson),
           maxGuests: Number(values.maxGuests),
           yearsExperience: Number(values.yearsExperience),
@@ -94,7 +116,7 @@ export default function ChefForm({
       }
 
       setMessage({ type: "ok", text: "Profile saved." });
-      router.refresh();
+      router.push("/chef"); router.push("/chef"); router.refresh();
     } catch {
       setMessage({ type: "error", text: "Network problem. Check your connection and try again." });
     } finally {
@@ -117,17 +139,49 @@ export default function ChefForm({
         <input id="city" className={inputClass} value={values.city} onChange={(e) => set("city", e.target.value)} />
       </Field>
 
+      <fieldset>
+        <legend className={labelClass}>Cuisines</legend>
+        <p className="mb-2 text-xs text-ink/70">
+          Tap everything you cook. {totalCuisines} of {MAX_CUISINES} chosen.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {CUISINE_OPTIONS.map((name) => {
+            const on = selected.includes(name);
+            const locked = !on && totalCuisines >= MAX_CUISINES;
+            return (
+              <button
+                key={name}
+                type="button"
+                aria-pressed={on}
+                disabled={locked}
+                onClick={() => toggleCuisine(name)}
+                className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  on ? "border-leaf bg-leaf text-white" : "border-leaf/40 hover:bg-sage"
+                }`}
+              >
+                {on && "✓ "}
+                {name}
+              </button>
+            );
+          })}
+        </div>
+        {errors.cuisines && (
+          <p className="mt-2 text-sm font-medium text-danger" role="alert">
+            {errors.cuisines}
+          </p>
+        )}
+      </fieldset>
+
       <Field
-        label="Cuisines"
-        htmlFor="cuisines"
-        error={errors.cuisines}
-        hint="Separate with commas, for example: north indian, mughlai, chinese"
+        label="Other cuisines (optional)"
+        htmlFor="customCuisines"
+        hint="Not in the list? Add your own, separated by commas."
       >
         <input
-          id="cuisines"
+          id="customCuisines"
           className={inputClass}
-          value={values.cuisines}
-          onChange={(e) => set("cuisines", e.target.value)}
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
         />
       </Field>
 
@@ -142,7 +196,12 @@ export default function ChefForm({
             onChange={(e) => set("pricePerPerson", e.target.value)}
           />
         </Field>
-        <Field 	label="Maximum guests you can cook for" htmlFor="maxGuests" error={errors.maxGuests}>
+        <Field
+          label="Maximum guests you can cook for"
+          htmlFor="maxGuests"
+          error={errors.maxGuests}
+          hint="The most guests in one booking."
+        >
           <input
             id="maxGuests"
             type="number"

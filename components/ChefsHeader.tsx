@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SearchBar from "@/components/SearchBar";
 import { FiltersIcon, FlameIcon } from "@/components/Icons";
 import type { CityOption } from "@/lib/cities";
+import type { CuisineOption } from "@/lib/cuisines";
 import { inputClass, labelClass, outlineButton } from "@/lib/ui";
 
 type State = {
@@ -13,6 +14,7 @@ type State = {
   sort: string;
   maxPrice: string;
   verified: boolean;
+  cuisine: string; // comma separated, lowercase
 };
 
 const SORT_LABELS: Record<string, string> = {
@@ -30,6 +32,7 @@ function toUrl(s: State) {
   if (s.sort && s.sort !== "recommended") params.set("sort", s.sort);
   if (s.maxPrice) params.set("maxPrice", s.maxPrice);
   if (s.verified) params.set("verified", "1");
+  if (s.cuisine) params.set("cuisine", s.cuisine);
   const qs = params.toString();
   return qs ? `/chefs?${qs}` : "/chefs";
 }
@@ -37,10 +40,12 @@ function toUrl(s: State) {
 export default function ChefsHeader({
   initial,
   chefCities,
+  cuisineOptions,
   title,
 }: {
   initial: State;
   chefCities: CityOption[];
+  cuisineOptions: CuisineOption[];
   title: string;
 }) {
   const router = useRouter();
@@ -52,7 +57,12 @@ export default function ChefsHeader({
   const [sort, setSort] = useState(initial.sort);
   const [maxPrice, setMaxPrice] = useState(initial.maxPrice);
   const [verified, setVerified] = useState(initial.verified);
-  const [showFilters, setShowFilters] = useState(Boolean(initial.maxPrice || initial.verified));
+  const [cuisines, setCuisines] = useState<string[]>(
+    initial.cuisine ? initial.cuisine.split(",").filter(Boolean) : []
+  );
+  const [showFilters, setShowFilters] = useState(
+    Boolean(initial.maxPrice || initial.verified || initial.cuisine)
+  );
 
   function push(patch: Partial<State>) {
     state.current = { ...state.current, ...patch };
@@ -70,14 +80,21 @@ export default function ChefsHeader({
     priceTimer.current = setTimeout(() => push({ maxPrice: value.trim() }), 400);
   }
 
+  function toggleCuisine(name: string) {
+    const next = cuisines.includes(name) ? cuisines.filter((c) => c !== name) : [...cuisines, name];
+    setCuisines(next);
+    push({ cuisine: next.join(",") });
+  }
+
   function clearFilters() {
     clearTimeout(priceTimer.current);
     setMaxPrice("");
     setVerified(false);
-    push({ maxPrice: "", verified: false });
+    setCuisines([]);
+    push({ maxPrice: "", verified: false, cuisine: "" });
   }
 
-  const activeFilters = (maxPrice ? 1 : 0) + (verified ? 1 : 0);
+  const activeFilters = (maxPrice ? 1 : 0) + (verified ? 1 : 0) + cuisines.length;
 
   return (
     <div>
@@ -112,7 +129,7 @@ export default function ChefsHeader({
               aria-expanded={showFilters}
               aria-controls="filters-panel"
               onClick={() => setShowFilters((v) => !v)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-3 font-semibold hover:bg-sage/30"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-3 font-semibold hover:bg-sage"
             >
               <FiltersIcon className="h-5 w-5" />
               Filters
@@ -143,39 +160,64 @@ export default function ChefsHeader({
         </div>
 
         {showFilters && (
-          <div
-            id="filters-panel"
-            className="mt-4 grid gap-4 rounded-xl bg-sage/25 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
-          >
-            <div>
-              <label htmlFor="maxPrice" className={labelClass}>
-                Max price per person (₹)
+          <div id="filters-panel" className="mt-4 space-y-5 rounded-xl bg-sage/70 p-4">
+            {cuisineOptions.length > 0 && (
+              <fieldset>
+                <legend className={labelClass}>Cuisine</legend>
+                <div className="flex flex-wrap gap-2">
+                  {cuisineOptions.map((option) => {
+                    const on = cuisines.includes(option.name);
+                    return (
+                      <button
+                        key={option.name}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleCuisine(option.name)}
+                        className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                          on ? "border-leaf bg-leaf text-white" : "border-leaf/40 bg-cream hover:bg-sage"
+                        }`}
+                      >
+                        {on && "✓ "}
+                        {option.name}
+                        <span className="ml-1.5 text-xs opacity-70">{option.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div>
+                <label htmlFor="maxPrice" className={labelClass}>
+                  Max price per person (₹)
+                </label>
+                <input
+                  id="maxPrice"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={maxPrice}
+                  onChange={(e) => onPriceChange(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <label className="flex min-h-[44px] items-center gap-3 text-base">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-leaf"
+                  checked={verified}
+                  onChange={(e) => {
+                    setVerified(e.target.checked);
+                    push({ verified: e.target.checked });
+                  }}
+                />
+                Verified chefs only
               </label>
-              <input
-                id="maxPrice"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                value={maxPrice}
-                onChange={(e) => onPriceChange(e.target.value)}
-                className={inputClass}
-              />
+              <button type="button" onClick={clearFilters} className={outlineButton}>
+                Clear filters
+              </button>
             </div>
-            <label className="flex min-h-[44px] items-center gap-3 text-base">
-              <input
-                type="checkbox"
-                className="h-5 w-5 accent-leaf"
-                checked={verified}
-                onChange={(e) => {
-                  setVerified(e.target.checked);
-                  push({ verified: e.target.checked });
-                }}
-              />
-              Verified chefs only
-            </label>
-            <button type="button" onClick={clearFilters} className={outlineButton}>
-              Clear filters
-            </button>
           </div>
         )}
       </div>

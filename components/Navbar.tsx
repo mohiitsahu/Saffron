@@ -12,17 +12,19 @@ export default async function Navbar() {
 
   const links: { href: string; label: string; alert?: boolean }[] = [
     { href: "/chefs", label: "Find a chef" },
-    {
-      href: "/cook-with-us",
-      label: isChef ? "Chef profile" : "Cook with us",
-    },
+    isChef
+      ? { href: "/chef", label: "Chef profile" }
+      : { href: "/cook-with-us", label: "Cook with us" },
   ];
   if (user) links.push({ href: "/bookings", label: "My bookings", alert: true });
 
   return (
-    <header className="sticky top-0 z-40 border-b border-leaf/20 bg-cream">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-2">
-        <Link href="/" className="font-heading text-2xl font-extrabold text-saffron">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-forest">
+      <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-4 py-2.5">
+        <Link
+          href="/"
+          className="rounded font-heading text-2xl font-extrabold tracking-tight text-saffron focus-visible:outline-cream"
+        >
           Saffron
         </Link>
         <NavMenu

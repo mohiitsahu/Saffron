@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { outlineButton, primaryButton } from "@/lib/ui";
+import { accentButton, outlineLightButton } from "@/lib/ui";
+import SignOutButton from "@/components/SignOutButton";
 
 type NavLink = { href: string; label: string; alert?: boolean };
 
@@ -13,7 +14,7 @@ function Dot({ count }: { count: number }) {
     <>
       <span
         aria-hidden="true"
-        className="absolute -right-2.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-cream"
+        className="absolute -right-2.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-forest"
       />
       <span className="sr-only">
         ({count} new {count === 1 ? "request" : "requests"})
@@ -71,9 +72,9 @@ export default function NavMenu({
   }, [isChef]);
 
   const itemClass = (href: string) =>
-    `flex min-h-[44px] items-center rounded-md px-3 text-base font-medium hover:bg-sage/30 ${
+    `flex min-h-[44px] items-center rounded-md px-3 text-base font-medium text-cream hover:bg-white/10 focus-visible:outline-cream ${
       pathname === href || pathname.startsWith(href + "/")
-        ? "text-leaf underline underline-offset-4"
+        ? "underline decoration-saffron decoration-2 underline-offset-8"
         : ""
     }`;
 
@@ -83,6 +84,12 @@ export default function NavMenu({
       {link.alert && <Dot count={pending} />}
     </span>
   );
+
+  // After signing in, come back to the page the person was on.
+  const signInHref =
+    pathname === "/" || pathname.startsWith("/signin")
+      ? "/signin"
+      : `/signin?callbackUrl=${encodeURIComponent(pathname)}`;
 
   const menuLabel = `${open ? "Close menu" : "Open menu"}${
     pending > 0 ? ` (${pending} new ${pending === 1 ? "request" : "requests"})` : ""
@@ -97,19 +104,17 @@ export default function NavMenu({
           </Link>
         ))}
         {signedIn ? (
-          <a href="/api/auth/signout" className={`${outlineButton} ml-2`}>
-            Sign out
-          </a>
+          <SignOutButton className={`${outlineLightButton} ml-2`} />
         ) : (
-          <a href="/api/auth/signin" className={`${primaryButton} ml-2`}>
+          <Link href={signInHref} className={`${accentButton} ml-2 focus-visible:outline-cream`}>
             Sign in
-          </a>
+          </Link>
         )}
       </nav>
 
       <button
         type="button"
-        className="relative flex h-11 w-11 items-center justify-center rounded-md border border-leaf/40 md:hidden"
+        className="relative flex h-11 w-11 items-center justify-center rounded-md border border-white/30 text-cream focus-visible:outline-cream md:hidden"
         aria-expanded={open}
         aria-controls="mobile-menu"
         aria-label={menuLabel}
@@ -121,7 +126,7 @@ export default function NavMenu({
         {pending > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-danger ring-2 ring-cream"
+            className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-saffron ring-2 ring-forest"
           />
         )}
       </button>
@@ -130,7 +135,7 @@ export default function NavMenu({
         <nav
           id="mobile-menu"
           aria-label="Mobile"
-          className="absolute inset-x-0 top-full border-b border-leaf/20 bg-cream px-4 pb-4 pt-2 shadow-md md:hidden"
+          className="absolute inset-x-0 top-full border-b border-white/10 bg-forest px-4 pb-4 pt-2 shadow-lg md:hidden"
         >
           <ul className="space-y-1">
             {links.map((link) => (
@@ -141,16 +146,18 @@ export default function NavMenu({
               </li>
             ))}
           </ul>
-          <div className="mt-3 border-t border-leaf/20 pt-3">
-            {signedIn && <p className="mb-2 truncate px-3 text-sm text-ink/70">{name}</p>}
+          <div className="mt-3 border-t border-white/10 pt-3">
+            {signedIn && <p className="mb-2 truncate px-3 text-sm text-cream/70">{name}</p>}
             {signedIn ? (
-              <a href="/api/auth/signout" className={`${outlineButton} w-full`}>
-                Sign out
-              </a>
+              <SignOutButton className={`${outlineLightButton} w-full`} />
             ) : (
-              <a href="/api/auth/signin" className={`${primaryButton} w-full`}>
+              <Link
+                href={signInHref}
+                className={`${accentButton} w-full focus-visible:outline-cream`}
+                onClick={() => setOpen(false)}
+              >
                 Sign in
-              </a>
+              </Link>
             )}
           </div>
         </nav>

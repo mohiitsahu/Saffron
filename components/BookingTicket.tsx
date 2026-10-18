@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { BookingView } from "@/lib/bookings";
 import { formatDateTimeIST, formatINR } from "@/lib/format";
-import { dangerButton, outlineButton, primaryButton } from "@/lib/ui";
+import { dangerButton, primaryButton } from "@/lib/ui";
 import ReviewForm from "@/components/ReviewForm";
 
 const STATUS: Record<BookingView["status"], { label: string; className: string }> = {
@@ -16,8 +16,18 @@ const STATUS: Record<BookingView["status"], { label: string; className: string }
   CANCELLED: { label: "Cancelled", className: "border border-danger text-danger" },
 };
 
-export default function BookingTicket({ booking }: { booking: BookingView }) {
+export default function BookingTicket({
+  booking,
+  collapsible = false,
+  defaultOpen = true,
+}: {
+  booking: BookingView;
+  // Past bookings show one summary line and expand when tapped.
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+}) {
   const router = useRouter();
+  const [open, setOpen] = useState(defaultOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,8 +36,22 @@ export default function BookingTicket({ booking }: { booking: BookingView }) {
   const canCancel = booking.status === "REQUESTED" || booking.status === "ACCEPTED";
   const canComplete = booking.status === "ACCEPTED" && booking.eventPassed;
   const status = STATUS[booking.status];
+  const shortId = booking.id.slice(-6).toUpperCase();
+  const roleLabel = isChef ? "Customer: " : "Chef: ";
+  const cancelledText =
+    booking.cancelledBy === "you"
+      ? "Cancelled by you"
+      : booking.cancelledBy === "other"
+        ? `Cancelled by the ${isChef ? "customer" : "chef"}`
+        : null;
+  const summary = `${formatDateTimeIST(booking.eventDate)} · ${booking.guests} ${
+    booking.guests === 1 ? "guest" : "guests"
+  } · ${formatINR(booking.estimatedTotal)}`;
+  const requestedLine = `Requested ${formatDateTimeIST(booking.createdAt)}${
+    cancelledText ? ` · ${cancelledText}` : ""
+  }`;
 
-  async function act(action: "accept" | "decline" | "cancel" | "complete", confirmText?: string) {
+  async function act(action: "accept" | "cancel" | "complete", confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true);
     setError("");
@@ -50,30 +74,13 @@ export default function BookingTicket({ booking }: { booking: BookingView }) {
     }
   }
 
-  return (
-    <article className="rounded-xl border-2 border-dashed border-leaf/60 bg-cream p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-heading text-xs font-bold uppercase tracking-widest text-leaf">
-            Order ticket · #{booking.id.slice(-6).toUpperCase()}
-          </p>
-          <h3 className="mt-1 text-xl font-bold">
-            {isChef ? "Customer: " : "Chef: "}
-            {!isChef && booking.chefProfileId ? (
-              <Link href={`/chefs/${booking.chefProfileId}`} className="underline underline-offset-4">
-                {booking.counterpartName}
-              </Link>
-            ) : (
-              booking.counterpartName
-            )}
-          </h3>
-        </div>
-        <span className={`flex-none rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}>
-          {status.label}
-        </span>
-      </div>
+  const cancelConfirm = isChef
+    ? "Cancel this booking? The customer will see that you cancelled it."
+    : "Cancel this booking?";
 
-      <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+  const body = (
+    <>
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="col-span-2">
           <dt className="text-xs font-semibold uppercase tracking-wide text-ink/60">When</dt>
           <dd className="font-semibold">{formatDateTimeIST(booking.eventDate)}</dd>
@@ -125,24 +132,21 @@ export default function BookingTicket({ booking }: { booking: BookingView }) {
         {booking.status === "ACCEPTED" && (
           <p className="text-ink/70">Pay the chef directly (UPI or cash) after the meal.</p>
         )}
+        {collapsible && !isChef && booking.chefProfileId && (
+          <p className="pt-1">
+            <Link href={`/chefs/${booking.chefProfileId}`} className="font-medium text-leaf underline underline-offset-4">
+              View chef profile
+            </Link>
+          </p>
+        )}
       </div>
 
-      {(canAnswer || canCancel || canComplete) && (
+      {(canCancel || canComplete) && (
         <div className="mt-4 flex flex-wrap gap-3">
           {canAnswer && (
-            <>
-              <button type="button" disabled={busy} onClick={() => act("accept")} className={primaryButton}>
-                Accept
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => act("decline", "Decline this request?")}
-                className={outlineButton}
-              >
-                Decline
-              </button>
-            </>
+            <button type="button" disabled={busy} onClick={() => act("accept")} className={primaryButton}>
+              Accept
+            </button>
           )}
           {canComplete && (
             <button type="button" disabled={busy} onClick={() => act("complete")} className={primaryButton}>
@@ -153,7 +157,7 @@ export default function BookingTicket({ booking }: { booking: BookingView }) {
             <button
               type="button"
               disabled={busy}
-              onClick={() => act("cancel", "Cancel this booking?")}
+              onClick={() => act("cancel", cancelConfirm)}
               className={dangerButton}
             >
               {canAnswer ? "Cancel" : "Cancel booking"}
@@ -185,6 +189,69 @@ export default function BookingTicket({ booking }: { booking: BookingView }) {
           {error}
         </p>
       )}
+    </>
+  );
+
+  const badge = (
+    <span className={`flex-none rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}>
+      {status.label}
+    </span>
+  );
+
+  if (collapsible) {
+    return (
+      <article className="rounded-2xl border border-leaf/30 bg-cream p-4">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-start justify-between gap-3 rounded-lg text-left"
+        >
+          <span className="min-w-0">
+            <span className="block font-heading text-xs font-bold uppercase tracking-widest text-leaf">
+              Order ticket · #{shortId}
+            </span>
+            <span className="mt-1 block text-lg font-bold">
+              {roleLabel}
+              {booking.counterpartName}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink/70">{requestedLine}</span>
+            <span className="mt-2 block text-sm text-ink/80">{summary}</span>
+          </span>
+          <span className="flex flex-none flex-col items-end gap-2">
+            {badge}
+            <span aria-hidden="true" className="text-xs text-ink/60">
+              {open ? "Hide ▲" : "Details ▼"}
+            </span>
+          </span>
+        </button>
+        {open && <div className="mt-4 border-t border-dashed border-leaf/50 pt-4">{body}</div>}
+      </article>
+    );
+  }
+
+  return (
+    <article className="rounded-2xl border-2 border-dashed border-leaf/60 bg-cream p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-heading text-xs font-bold uppercase tracking-widest text-leaf">
+            Order ticket · #{shortId}
+          </p>
+          <h3 className="mt-1 text-xl font-bold">
+            {roleLabel}
+            {!isChef && booking.chefProfileId ? (
+              <Link href={`/chefs/${booking.chefProfileId}`} className="underline underline-offset-4">
+                {booking.counterpartName}
+              </Link>
+            ) : (
+              booking.counterpartName
+            )}
+          </h3>
+          <p className="mt-0.5 text-xs text-ink/70">{requestedLine}</p>
+        </div>
+        {badge}
+      </div>
+      <div className="mt-4">{body}</div>
     </article>
   );
 }

@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
+  // Use our own sign-in page instead of NextAuth's default one. Errors show up there too.
+  pages: { signIn: "/signin", error: "/signin" },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,

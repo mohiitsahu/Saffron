@@ -4,8 +4,15 @@ import { prisma } from "@/lib/prisma";
 import ChefsHeader from "@/components/ChefsHeader";
 import ChefListCard from "@/components/ChefListCard";
 import { CheckCircleIcon } from "@/components/Icons";
-import { chefListSelect, getChefCities, getRatingMap } from "@/lib/chefs";
+import {
+  chefListSelect,
+  getChefCities,
+  getChefCuisines,
+  getCompletedMap,
+  getRatingMap,
+} from "@/lib/chefs";
 import { cityVariants, findCity } from "@/lib/cities";
+import { outlineButton } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +25,7 @@ type SearchParams = {
   sort?: string | string[];
   maxPrice?: string | string[];
   verified?: string | string[];
+  cuisine?: string | string[];
 };
 
 function one(value?: string | string[]) {
@@ -32,6 +40,11 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
   const maxPriceRaw = Number(one(searchParams.maxPrice));
   const maxPrice = Number.isInteger(maxPriceRaw) && maxPriceRaw > 0 ? maxPriceRaw : null;
   const verifiedOnly = one(searchParams.verified) === "1";
+  const cuisineFilter = one(searchParams.cuisine)
+    .split(",")
+    .map((c) => c.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 10);
 
   const where: Prisma.ChefProfileWhereInput = { active: true };
   if (city) {
@@ -41,8 +54,10 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
   }
   if (maxPrice) where.pricePerPerson = { lte: maxPrice };
   if (verifiedOnly) where.verified = true;
+  // A chef matches if they cook any of the chosen cuisines.
+  if (cuisineFilter.length > 0) where.cuisines = { hasSome: cuisineFilter };
 
-  const [rows, chefCities] = await Promise.all([
+  const [rows, chefCities, cuisineOptions] = await Promise.all([
     prisma.chefProfile.findMany({
       where,
       orderBy: [{ verified: "desc" }, { createdAt: "desc" }],
@@ -50,6 +65,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
       select: chefListSelect,
     }),
     getChefCities(),
+    getChefCuisines(),
   ]);
 
   // Search by chef name, cuisine, dish or bio. Every word typed must match somewhere.
@@ -63,7 +79,8 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
       })
     : rows;
 
-  const ratings = await getRatingMap(matched.map((c) => c.userId));
+  const matchedIds = matched.map((c) => c.userId);
+  const [ratings, completed] = await Promise.all([getRatingMap(matchedIds), getCompletedMap(matchedIds)]);
   const avgOf = (userId: string) => ratings.get(userId)?.avg ?? 0;
   const countOf = (userId: string) => ratings.get(userId)?.count ?? 0;
 
@@ -87,10 +104,18 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
   const title = city ? `The chefs of ${findCity(city)?.name ?? city}` : "Chefs on Saffron";
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8">
+    <div className="mx-auto w-full max-w-screen-2xl px-4 py-8">
       <ChefsHeader
-        initial={{ q, city, sort, maxPrice: maxPrice ? String(maxPrice) : "", verified: verifiedOnly }}
+        initial={{
+          q,
+          city,
+          sort,
+          maxPrice: maxPrice ? String(maxPrice) : "",
+          verified: verifiedOnly,
+          cuisine: cuisineFilter.join(","),
+        }}
         chefCities={chefCities}
+        cuisineOptions={cuisineOptions}
         title={title}
       />
 
@@ -108,24 +133,32 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
       </div>
 
       {visible.length === 0 ? (
-        <div className="mt-6 rounded-xl border-2 border-dashed border-leaf/50 p-6">
-          <h2 className="text-lg font-bold">No chefs match yet</h2>
-          <p className="mt-1 text-ink/80">
-            Try a different city or cuisine, or raise the maximum price.{" "}
-            <Link href="/chefs" className="font-medium text-leaf underline underline-offset-4">
+        <div className="mt-6 rounded-2xl border-2 border-dashed border-leaf/50 bg-sage/70 p-8 text-center">
+          <h2 className="text-xl font-bold">No chefs match yet</h2>
+          <p className="mx-auto mt-2 max-w-md text-ink/80">
+            Try a different city or cuisine, or raise the maximum price. Know a great home chef? Invite
+            them to join Saffron.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <Link href="/chefs" className={outlineButton}>
               Clear search
             </Link>
-          </p>
+          </div>
         </div>
       ) : (
-        <div className="mt-6 space-y-5">
+        <div className="mt-6 grid gap-5 xl:grid-cols-2">
           {visible.map((chef) => (
-            <ChefListCard
+            <div
               key={chef.id}
-              chef={chef}
-              avg={ratings.get(chef.userId)?.avg ?? null}
-              count={countOf(chef.userId)}
-            />
+              className={`h-full [&>a]:h-full ${visible.length === 1 ? "xl:col-span-2" : ""}`}
+            >
+              <ChefListCard
+                chef={chef}
+                avg={ratings.get(chef.userId)?.avg ?? null}
+                count={countOf(chef.userId)}
+                completed={completed.get(chef.userId) ?? 0}
+              />
+            </div>
           ))}
         </div>
       )}

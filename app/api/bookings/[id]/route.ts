@@ -3,9 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bookingSelect, resolveTransition, serializeBooking } from "@/lib/bookings";
+import { formatDateTimeIST } from "@/lib/format";
 import { bookingActionSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+// A chef needs at least this long between two accepted bookings.
+const ACCEPT_GAP_MS = 4 * 60 * 60 * 1000;
+
+type Outcome = { ok: true } | { ok: false; status: number; error: string };
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -42,16 +48,60 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: result.error }, { status: result.httpStatus });
   }
 
-  // Only update if the status is still what we just checked, so two clicks can't both win.
-  const updated = await prisma.booking.updateMany({
-    where: { id: booking.id, status: booking.status },
-    data: { status: result.status },
+  const outcome: Outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
+    if (parsed.data.action === "accept") {
+      // One accept at a time per chef, so two accepts at the same moment can't both pass the check below.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.chefId}))`;
+
+      const clash = await tx.booking.findFirst({
+        where: {
+          chefId: booking.chefId,
+          status: "ACCEPTED",
+          id: { not: booking.id },
+          eventDate: {
+            gt: new Date(booking.eventDate.getTime() - ACCEPT_GAP_MS),
+            lt: new Date(booking.eventDate.getTime() + ACCEPT_GAP_MS),
+          },
+        },
+        select: { eventDate: true },
+      });
+
+      if (clash) {
+        return {
+          ok: false,
+          status: 409,
+          error: `You already have an accepted booking on ${formatDateTimeIST(clash.eventDate)}. Keep at least 4 hours between bookings, or cancel one of them first.`,
+        };
+      }
+    }
+
+    // Only update if the status is still what we just checked, so two clicks can't both win.
+    const updated = await tx.booking.updateMany({
+      where: { id: booking.id, status: booking.status },
+      data: { status: result.status },
+    });
+    if (updated.count === 0) {
+      return {
+        ok: false,
+        status: 409,
+        error: "This booking was just updated. Refresh the page and try again.",
+      };
+    }
+
+    await tx.bookingEvent.create({
+      data: {
+        bookingId: booking.id,
+        actorId: userId,
+        fromStatus: booking.status,
+        toStatus: result.status,
+      },
+    });
+
+    return { ok: true };
   });
-  if (updated.count === 0) {
-    return NextResponse.json(
-      { error: "This booking was just updated. Refresh the page and try again." },
-      { status: 409 }
-    );
+
+  if (!outcome.ok) {
+    return NextResponse.json({ error: outcome.error }, { status: outcome.status });
   }
 
   const fresh = await prisma.booking.findUnique({ where: { id: booking.id }, select: bookingSelect });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
     where: {
       customerId: userId,
       chefId: chef.userId,
-      status: { in: ["REQUESTED", "ACCEPTED", "DECLINED"] },
+      status: { in: ["REQUESTED", "ACCEPTED"] },
     },
     select: { status: true },
   });
@@ -100,21 +101,41 @@ export async function POST(req: Request) {
   // The total is always calculated here, never taken from the browser.
   const estimatedTotal = guests * chef.pricePerPerson;
 
-  const booking = await prisma.booking.create({
-    data: {
-      customerId: userId,
-      chefId: chef.userId,
-      eventDate,
-      guests,
-      city: chef.city,
-      area,
-      address,
-      phone,
-      notes: notes || null,
-      estimatedTotal,
-    },
-    select: bookingSelect,
-  });
+  try {
+    // The booking and its first log entry are saved together or not at all.
+    const booking = await prisma.$transaction(async (tx) => {
+      const created = await tx.booking.create({
+        data: {
+          customerId: userId,
+          chefId: chef.userId,
+          eventDate,
+          guests,
+          city: chef.city,
+          area,
+          address,
+          phone,
+          notes: notes || null,
+          estimatedTotal,
+        },
+        select: bookingSelect,
+      });
 
-  return NextResponse.json({ booking: serializeBooking(booking, userId) }, { status: 201 });
+      await tx.bookingEvent.create({
+        data: { bookingId: created.id, actorId: userId, fromStatus: null, toStatus: "REQUESTED" },
+      });
+
+      return created;
+    });
+
+    return NextResponse.json({ booking: serializeBooking(booking, userId) }, { status: 201 });
+  } catch (error) {
+    // Two clicks at once: the database rule lets only one open request through.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        { error: "You already have an open request with this chef. Check My bookings." },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 }

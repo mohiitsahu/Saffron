@@ -24,6 +24,13 @@ export const bookingSelect = {
     },
   },
   review: { select: { rating: true } },
+  // The latest cancellation, so each side can see who cancelled.
+  events: {
+    where: { toStatus: "CANCELLED" },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: { actorId: true },
+  },
 } as const;
 
 type BookingRow = Prisma.BookingGetPayload<{ select: typeof bookingSelect }>;
@@ -32,6 +39,7 @@ export type BookingView = {
   id: string;
   role: "customer" | "chef";
   status: BookingStatus;
+  createdAt: string;
   eventDate: string;
   eventPassed: boolean;
   guests: number;
@@ -45,6 +53,7 @@ export type BookingView = {
   contactPhone: string | null;
   contactRevealed: boolean;
   reviewRating: number | null;
+  cancelledBy: "you" | "other" | null;
 };
 
 // Private details are shared only once the chef has accepted.
@@ -59,11 +68,13 @@ export function serializeBooking(booking: BookingRow, viewerId: string): Booking
   const role = booking.customerId === viewerId ? "customer" : "chef";
   const revealed = REVEAL_STATUSES.includes(booking.status);
   const chefName = booking.chef.chefProfile?.displayName ?? booking.chef.name ?? "Chef";
+  const cancelActor = booking.events[0]?.actorId ?? null;
 
   return {
     id: booking.id,
     role,
     status: booking.status,
+    createdAt: booking.createdAt.toISOString(),
     eventDate: booking.eventDate.toISOString(),
     eventPassed: booking.eventDate.getTime() <= Date.now(),
     guests: booking.guests,
@@ -79,10 +90,16 @@ export function serializeBooking(booking: BookingRow, viewerId: string): Booking
     contactPhone: revealed ? (role === "customer" ? booking.chef.phone : booking.phone) : null,
     contactRevealed: revealed,
     reviewRating: booking.review?.rating ?? null,
+    cancelledBy:
+      booking.status === "CANCELLED" && cancelActor
+        ? cancelActor === viewerId
+          ? "you"
+          : "other"
+        : null,
   };
 }
 
-export type BookingAction = "accept" | "decline" | "cancel" | "complete";
+export type BookingAction = "accept" | "cancel" | "complete";
 
 type Transition =
   | { ok: true; status: BookingStatus }
@@ -92,7 +109,7 @@ function fail(httpStatus: number, error: string): Transition {
   return { ok: false, error, httpStatus };
 }
 
-// REQUESTED -> ACCEPTED -> COMPLETED, with DECLINED and CANCELLED as side exits.
+// REQUESTED -> ACCEPTED -> COMPLETED. Either side can cancel a requested or accepted booking.
 export function resolveTransition(
   action: BookingAction,
   booking: { status: BookingStatus; eventDate: Date },
@@ -100,16 +117,15 @@ export function resolveTransition(
   now: Date = new Date()
 ): Transition {
   switch (action) {
-    case "accept":
-    case "decline": {
-      if (role !== "chef") return fail(403, "Only the chef can accept or decline a request.");
+    case "accept": {
+      if (role !== "chef") return fail(403, "Only the chef can accept a request.");
       if (booking.status !== "REQUESTED") {
         return fail(409, "This request has already been answered or cancelled.");
       }
-      if (action === "accept" && booking.eventDate.getTime() <= now.getTime()) {
+      if (booking.eventDate.getTime() <= now.getTime()) {
         return fail(400, "The event time has already passed, so this can't be accepted.");
       }
-      return { ok: true, status: action === "accept" ? "ACCEPTED" : "DECLINED" };
+      return { ok: true, status: "ACCEPTED" };
     }
     case "cancel": {
       if (booking.status !== "REQUESTED" && booking.status !== "ACCEPTED") {

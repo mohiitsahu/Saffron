@@ -8,5 +8,7 @@ const buttonBase =
 
 export const primaryButton = `${buttonBase} bg-leaf text-white hover:bg-leaf/90`;
 export const accentButton = `${buttonBase} bg-saffron text-ink hover:bg-saffron/90`;
-export const outlineButton = `${buttonBase} border border-leaf text-leaf hover:bg-sage/30`;
+export const outlineButton = `${buttonBase} border border-leaf text-leaf hover:bg-sage`;
 export const dangerButton = `${buttonBase} border border-danger text-danger hover:bg-danger/10`;
+// For dark backgrounds such as the navbar.
+export const outlineLightButton = `${buttonBase} border border-cream/60 text-cream hover:bg-white/10 focus-visible:outline-cream`;

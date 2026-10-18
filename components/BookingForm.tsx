@@ -14,7 +14,7 @@ type Props = {
   existingStatus: "REQUESTED" | "ACCEPTED" | "DECLINED" | null;
 };
 
-const ticketClass = "rounded-xl border-2 border-dashed border-leaf bg-sage/20 p-5";
+const ticketClass = "rounded-2xl border-2 border-dashed border-leaf bg-cream p-5 shadow-sm";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -25,18 +25,16 @@ function Field({
   htmlFor,
   error,
   hint,
-  className = "",
   children,
 }: {
   label: string;
   htmlFor: string;
   error?: string;
   hint?: string;
-  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={className}>
+    <div>
       <label htmlFor={htmlFor} className={labelClass}>
         {label}
       </label>
@@ -121,11 +119,14 @@ export default function BookingForm({
   if (viewer === "guest") {
     return (
       <section id="book" className={ticketClass}>
-        <h2 className="text-xl font-bold">Book this chef</h2>
-        <p className="mt-1 text-sm text-ink/80">Sign in with Google to send a booking request.</p>
+        <h2 className="text-xl font-bold">Request {chefName}</h2>
+        <p className="mt-1 text-sm text-ink/80">
+          Sign in with Google to send a request. You won&apos;t be charged, and your address stays private
+          until the chef accepts.
+        </p>
         <a
-          href={`/api/auth/signin?callbackUrl=${encodeURIComponent(`/chefs/${chefProfileId}`)}`}
-          className={`${primaryButton} mt-4`}
+          href={`/signin?callbackUrl=${encodeURIComponent(`/chefs/${chefProfileId}`)}`}
+          className={`${primaryButton} mt-4 w-full`}
         >
           Sign in to request
         </a>
@@ -137,7 +138,9 @@ export default function BookingForm({
     return (
       <section id="book" className={ticketClass}>
         <h2 className="text-xl font-bold">This is your profile</h2>
-        <p className="mt-1 text-sm text-ink/80">Customers will see a booking form here. You can&apos;t book yourself.</p>
+        <p className="mt-1 text-sm text-ink/80">
+          Customers will see a booking form here. You can&apos;t book yourself.
+        </p>
       </section>
     );
   }
@@ -160,7 +163,7 @@ export default function BookingForm({
         </p>
         <Link
           href={existingStatus === "DECLINED" ? "/chefs" : "/bookings"}
-          className={`${outlineButton} mt-4`}
+          className={`${outlineButton} mt-4 w-full`}
         >
           {existingStatus === "DECLINED" ? "Find another chef" : "Go to My bookings"}
         </Link>
@@ -176,7 +179,7 @@ export default function BookingForm({
           {chefName} will accept or decline. You&apos;ll see the answer under My bookings. Their phone number
           and your full address are shared only after they accept.
         </p>
-        <Link href="/bookings" className={`${outlineButton} mt-4`}>
+        <Link href="/bookings" className={`${outlineButton} mt-4 w-full`}>
           Go to My bookings
         </Link>
       </section>
@@ -186,13 +189,13 @@ export default function BookingForm({
   return (
     <section id="book" aria-labelledby="book-heading" className={ticketClass}>
       <h2 id="book-heading" className="text-xl font-bold">
-        Booking ticket
+        Request {chefName}
       </h2>
       <p className="mt-1 text-sm text-ink/80">
-        {chefName} can cook for up to {maxGuests} guests. Times are in IST.
+        Cooks for up to {maxGuests} guests. Times are in IST. You won&apos;t be charged now.
       </p>
 
-      <form onSubmit={onSubmit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
+      <form onSubmit={onSubmit} noValidate className="mt-4 space-y-4">
         <Field label="Date and time" htmlFor="b-date" error={errors.eventDate} hint="At least 24 hours from now.">
           <input
             id="b-date"
@@ -226,7 +229,12 @@ export default function BookingForm({
           <input id="b-area" value={area} onChange={(e) => setArea(e.target.value)} className={inputClass} />
         </Field>
 
-        <Field label="Your phone number" htmlFor="b-phone" error={errors.phone} hint="Shared with the chef only after they accept.">
+        <Field
+          label="Your phone number"
+          htmlFor="b-phone"
+          error={errors.phone}
+          hint="Shared with the chef only after they accept."
+        >
           <input
             id="b-phone"
             type="tel"
@@ -242,7 +250,6 @@ export default function BookingForm({
           htmlFor="b-address"
           error={errors.address}
           hint="Shared with the chef only after they accept."
-          className="sm:col-span-2"
         >
           <textarea
             id="b-address"
@@ -253,7 +260,7 @@ export default function BookingForm({
           />
         </Field>
 
-        <Field label="Food notes or allergies" htmlFor="b-notes" error={errors.notes} className="sm:col-span-2">
+        <Field label="Food notes or allergies" htmlFor="b-notes" error={errors.notes}>
           <textarea
             id="b-notes"
             rows={2}
@@ -263,22 +270,28 @@ export default function BookingForm({
           />
         </Field>
 
-        <div className="flex flex-col gap-3 border-t-2 border-dashed border-leaf pt-4 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-t-2 border-dashed border-leaf pt-4">
           <p className="text-sm">
             Estimated total
-            <span className="block text-xl font-bold">{estimate !== null ? formatINR(estimate) : "—"}</span>
+            <span className="block text-2xl font-bold">{estimate !== null ? formatINR(estimate) : "—"}</span>
             <span className="text-xs text-ink/70">
-              {guestsValid ? `${guestsNumber} ${guestsNumber === 1 ? "guest" : "guests"} × ${formatINR(pricePerPerson)}. ` : ""}
-              Groceries and extras are agreed with the chef. You pay the chef directly after the meal.
+              {guestsValid
+                ? `${guestsNumber} ${guestsNumber === 1 ? "guest" : "guests"} × ${formatINR(pricePerPerson)}. `
+                : ""}
+              Groceries and extras are agreed with the chef.
             </span>
           </p>
-          <button type="submit" disabled={sending} className={primaryButton}>
+
+          <button type="submit" disabled={sending} className={`${primaryButton} mt-4 w-full`}>
             {sending ? "Sending..." : "Send request"}
           </button>
+          <p className="mt-3 text-center text-xs text-ink/70">
+            No payment now. You pay the chef directly after the meal.
+          </p>
         </div>
 
         {message && (
-          <p role="alert" className="font-medium text-danger sm:col-span-2">
+          <p role="alert" className="font-medium text-danger">
             {message}
           </p>
         )}

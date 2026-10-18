@@ -23,6 +23,31 @@ type Props = {
   pending?: boolean;
 };
 
+function ClearButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-ink/70 hover:bg-sage hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  );
+}
+
 export default function SearchBar({
   variant,
   initialQ = "",
@@ -42,6 +67,8 @@ export default function SearchBar({
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState("");
 
+  const qRef = useRef<HTMLInputElement>(null);
+  const cityRef = useRef<HTMLInputElement>(null);
   const committedCity = useRef(initialCity);
   const queryCallback = useRef(onQueryChange);
   queryCallback.current = onQueryChange;
@@ -159,6 +186,17 @@ export default function SearchBar({
     }
   }
 
+  function clearQuery() {
+    setQ("");
+    queryCallback.current?.("");
+    qRef.current?.focus();
+  }
+
+  function clearCity() {
+    onCityChange("");
+    cityRef.current?.focus();
+  }
+
   function onCityKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -191,54 +229,67 @@ export default function SearchBar({
 
   const hero = variant === "hero";
   const listId = `${uid}-cities`;
+  const cellFocus = "focus-within:bg-sage/70 focus-within:ring-2 focus-within:ring-inset focus-within:ring-leaf";
 
   return (
     <form onSubmit={handleSubmit} role="search" aria-label="Find a chef">
       <div className="grid rounded-2xl border border-leaf/30 bg-cream text-ink shadow-sm md:grid-cols-[1fr_1fr_auto] md:items-center">
-        <div className="flex items-center gap-3 border-b border-leaf/20 px-4 py-3 md:border-b-0 md:border-r">
+        <div
+          className={`flex items-center gap-3 rounded-t-2xl border-b border-leaf/20 px-4 py-3 md:rounded-l-2xl md:rounded-tr-none md:border-b-0 md:border-r ${cellFocus}`}
+        >
           <SearchIcon className="h-5 w-5 flex-none" />
           <div className="min-w-0 flex-1">
             <label htmlFor={`${uid}-q`} className="block text-sm font-semibold">
               What are you craving?
             </label>
-            <input
-              id={`${uid}-q`}
-              type="text"
-              autoComplete="off"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Chef, cuisine or dish"
-              className="w-full bg-transparent text-base placeholder:text-ink/50"
-            />
+            <div className="flex items-center gap-1">
+              <input
+                ref={qRef}
+                id={`${uid}-q`}
+                type="text"
+                autoComplete="off"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Chef, cuisine or dish"
+                className="min-w-0 flex-1 bg-transparent text-base placeholder:text-ink/50 focus:outline-none"
+              />
+              {q && <ClearButton label="Clear search" onClick={clearQuery} />}
+            </div>
           </div>
         </div>
 
-        <div className="relative flex items-center gap-3 border-b border-leaf/20 px-4 py-3 md:border-b-0">
+        <div
+          className={`relative flex items-center gap-3 border-b border-leaf/20 px-4 py-3 md:border-b-0 ${cellFocus}`}
+        >
           <PinIcon className="h-5 w-5 flex-none" />
           <div className="min-w-0 flex-1">
             <label htmlFor={`${uid}-city`} className="block text-sm font-semibold">
               Near
             </label>
-            <input
-              id={`${uid}-city`}
-              type="text"
-              role="combobox"
-              aria-expanded={open}
-              aria-controls={listId}
-              aria-autocomplete="list"
-              aria-activedescendant={active >= 0 ? `${uid}-opt-${active}` : undefined}
-              autoComplete="off"
-              value={city}
-              onChange={(e) => onCityChange(e.target.value)}
-              onFocus={() => setOpen(true)}
-              onBlur={() => {
-                setOpen(false);
-                commitTyped();
-              }}
-              onKeyDown={onCityKeyDown}
-              placeholder="Type your city"
-              className="w-full bg-transparent text-base placeholder:text-ink/50"
-            />
+            <div className="flex items-center gap-1">
+              <input
+                ref={cityRef}
+                id={`${uid}-city`}
+                type="text"
+                role="combobox"
+                aria-expanded={open}
+                aria-controls={listId}
+                aria-autocomplete="list"
+                aria-activedescendant={active >= 0 ? `${uid}-opt-${active}` : undefined}
+                autoComplete="off"
+                value={city}
+                onChange={(e) => onCityChange(e.target.value)}
+                onFocus={() => setOpen(true)}
+                onBlur={() => {
+                  setOpen(false);
+                  commitTyped();
+                }}
+                onKeyDown={onCityKeyDown}
+                placeholder="Type your city"
+                className="min-w-0 flex-1 bg-transparent text-base placeholder:text-ink/50 focus:outline-none"
+              />
+              {city && <ClearButton label="Clear city" onClick={clearCity} />}
+            </div>
           </div>
 
           {open && (
@@ -257,7 +308,7 @@ export default function SearchBar({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => pick(item)}
                   className={`flex min-h-[44px] cursor-pointer items-center justify-between gap-3 px-4 py-2 text-sm ${
-                    i === active ? "bg-sage/40" : "hover:bg-sage/25"
+                    i === active ? "bg-sage" : "hover:bg-sage/70"
                   }`}
                 >
                   {item.kind === "locate" ? (
@@ -310,7 +361,7 @@ export default function SearchBar({
             type="button"
             onClick={() => pickPopular(label)}
             className={`rounded-full border px-3 py-2 font-medium ${
-              hero ? "border-white/40 hover:bg-white/15" : "border-leaf/30 hover:bg-sage/30"
+              hero ? "border-white/40 hover:bg-white/15" : "border-leaf/30 hover:bg-sage"
             }`}
           >
             {label}
