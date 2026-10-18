@@ -44,7 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div aria-hidden="true" className="h-1 bg-gradient-to-r from-transparent via-saffron/80 to-transparent" />
           <div className="mx-auto grid max-w-screen-2xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="font-heading text-2xl font-extrabold text-saffron">Saffron</p>
+              <div className="flex items-center gap-2.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-96.png" alt="" width={44} height={44} className="h-11 w-11 object-contain" />
+                <p className="font-heading text-2xl font-extrabold text-saffron">Saffron</p>
+              </div>
               <p className="mt-2 text-sm text-cream/80">Home chefs, cooking in your own kitchen.</p>
             </div>
 
