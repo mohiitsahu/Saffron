@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Saffron
 
-## Getting Started
+Book a verified home chef to cook in your own kitchen. Customers search for chefs and send a
+booking request; chefs accept or decline. Prices are in ₹ and customers pay the chef directly
+(Saffron never handles money).
 
-First, run the development server:
+Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Prisma + PostgreSQL, NextAuth
+(Google sign-in) and Zod.
+
+## Features
+
+- Find chefs by city, cuisine, dish and budget, with ratings and verified badges
+- Chef profiles with photo upload, sample menu and reviews
+- Booking requests: accept, decline, cancel and complete, with the customer's address and the
+  chef's phone number revealed only after the chef accepts
+- Requests that nobody answers expire on their own; accepted bookings close themselves
+  3 days after the event
+- Admin page (`/admin`) to verify chefs, hide profiles and remove photos
+
+## Getting started
+
+You need Node.js 20 or newer and a PostgreSQL database (a free [Neon](https://neon.tech)
+database works well).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env        # on Windows: copy .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `.env` and fill in every value. The comments in `.env.example` explain each one.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create the database tables and start the app:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx prisma migrate dev
+npm run dev
+```
 
-## Learn More
+Open <http://localhost:3000>.
 
-To learn more about Next.js, take a look at the following resources:
+### Environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable | What it is |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string the app uses |
+| `DIRECT_URL` | Direct (non-pooled) connection string, used for migrations |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
+| `NEXTAUTH_SECRET` | Random string that signs login cookies. Required in production |
+| `NEXTAUTH_URL` | The site's public address, for example `http://localhost:3000` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Making yourself an admin
 
-## Deploy on Vercel
+New accounts are customers. To get access to `/admin`, set your role in the database. In the
+Neon dashboard open **SQL Editor** and run, with your own email:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```sql
+UPDATE "User" SET role = 'ADMIN' WHERE email = 'you@example.com';
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Sign out and back in. An **Admin** link appears in the navbar.
+
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the development server |
+| `npm run build` | Build for production |
+| `npm start` | Run the production build |
+| `npm run lint` | Check the code with ESLint |
+| `npx prisma migrate dev` | Apply new migrations to your development database |
+| `npx prisma migrate deploy` | Apply migrations to a production database |
+| `npx prisma studio` | Browse the database in your browser |
+
+## Project layout
+
+```
+app/            pages and API routes (App Router)
+  api/          bookings, chef profile, photos, reviews, notifications, admin
+components/     React components
+lib/            shared logic: booking rules, validation, auth, formatting
+prisma/         database schema and migrations
+public/         static files (logo)
+```
+
+## How things work
+
+- **Booking rules** live in `lib/bookings.ts`. Status changes go through `resolveTransition`, and
+  `settleStaleBookings` expires old requests and closes finished bookings.
+- **Privacy** is enforced on the server in `serializeBooking`: the browser never receives the
+  address or phone number before a booking is accepted.
+- **Photos** are shrunk in the browser (about 100 KB) and stored in the `ChefPhoto` table, then
+  served from `/api/photos/[id]`. Only JPEG, PNG and WebP are accepted.
+- **Limits** on abuse: at most 5 waiting requests and 10 requests per hour per customer, and a
+  10-second pause between photo uploads.
+
+## Deploying
+
+The Prisma schema already includes the `rhel-openssl-3.0.x` binary target needed on Netlify and
+similar serverless hosts. On your host:
+
+1. Set all the environment variables above. Set `NEXTAUTH_URL` to your real address and add
+   `https://YOUR-DOMAIN/api/auth/callback/google` to your Google OAuth client.
+2. Use `npm run build` as the build command.
+3. Run `npx prisma migrate deploy` against the production database before (or as part of) each
+   release that adds a migration.
