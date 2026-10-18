@@ -21,7 +21,8 @@ export const metadata: Metadata = {
   description: "Book a home chef to cook in your own kitchen for dinners, birthdays and house parties.",
 };
 
-const footerLink = "rounded text-sm text-cream/80 hover:text-white hover:underline focus-visible:outline-cream";
+const footerLink =
+  "inline-block rounded text-sm text-cream/80 transition duration-200 hover:text-saffron hover:underline hover:underline-offset-4 focus-visible:outline-cream motion-safe:hover:translate-x-0.5";
 const footerHeading = "text-xs font-semibold uppercase tracking-widest text-saffron";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         <footer className="bg-forest text-cream">
+          <div aria-hidden="true" className="h-1 bg-gradient-to-r from-transparent via-saffron/80 to-transparent" />
           <div className="mx-auto grid max-w-screen-2xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="font-heading text-2xl font-extrabold text-saffron">Saffron</p>

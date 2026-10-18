@@ -74,7 +74,7 @@ export default async function ChefIdCardPage() {
       {pending > 0 && (
         <Link
           href="/bookings"
-          className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/5 p-4"
+          className="mt-4 flex animate-fade-in items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/5 p-4 transition-colors hover:bg-danger/10"
         >
           <span className="flex items-center gap-2 font-medium">
             <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-danger" />
@@ -85,8 +85,8 @@ export default async function ChefIdCardPage() {
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <article className="overflow-hidden rounded-2xl border-2 border-dashed border-leaf bg-cream">
-          <header className="flex items-center justify-between gap-3 bg-forest px-5 py-3 text-white">
+        <article className="animate-fade-up overflow-hidden rounded-2xl border-2 border-dashed border-leaf bg-cream shadow-soft">
+          <header className="flex items-center justify-between gap-3 bg-gradient-to-r from-forest to-leaf px-5 py-3 text-white">
             <span className="font-heading text-lg font-extrabold tracking-wide text-saffron">SAFFRON</span>
             <span className="text-xs font-semibold uppercase tracking-widest">Chef ID · {chefId}</span>
           </header>
@@ -183,7 +183,7 @@ export default async function ChefIdCardPage() {
           </footer>
         </article>
 
-        <aside className="space-y-4">
+        <aside className="animate-fade-up space-y-4" style={{ animationDelay: "120ms" }}>
           <div className="flex flex-col gap-3 [&>*]:w-full">
             <Link href="/cook-with-us" className={primaryButton}>
               Edit profile

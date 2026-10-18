@@ -63,9 +63,9 @@ export default function ReviewForm({ bookingId }: { bookingId: string }) {
               />
               <span
                 aria-hidden="true"
-                className={`block min-h-[44px] min-w-[44px] text-center text-3xl leading-[44px] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 ${
+                className={`block min-h-[44px] min-w-[44px] text-center text-3xl leading-[44px] transition-transform duration-150 hover:scale-125 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 ${
                   n <= rating ? "text-saffron" : "text-ink/30"
-                }`}
+                } ${n === rating ? "animate-pop" : ""}`}
               >
                 ★
               </span>
@@ -102,7 +102,7 @@ export default function ReviewForm({ bookingId }: { bookingId: string }) {
       </div>
 
       {message && (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <p role="alert" className="animate-fade-in text-sm font-medium text-danger">
           {message}
         </p>
       )}

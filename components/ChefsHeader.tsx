@@ -160,7 +160,7 @@ export default function ChefsHeader({
         </div>
 
         {showFilters && (
-          <div id="filters-panel" className="mt-4 space-y-5 rounded-xl bg-sage/70 p-4">
+          <div id="filters-panel" className="mt-4 animate-slide-down space-y-5 rounded-xl bg-sage/70 p-4 shadow-soft">
             {cuisineOptions.length > 0 && (
               <fieldset>
                 <legend className={labelClass}>Cuisine</legend>
@@ -173,7 +173,7 @@ export default function ChefsHeader({
                         type="button"
                         aria-pressed={on}
                         onClick={() => toggleCuisine(option.name)}
-                        className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                        className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition duration-200 active:scale-95 ${
                           on ? "border-leaf bg-leaf text-white" : "border-leaf/40 bg-cream hover:bg-sage"
                         }`}
                       >

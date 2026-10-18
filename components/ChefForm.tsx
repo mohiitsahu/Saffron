@@ -49,7 +49,7 @@ function Field({
       {children}
       {hint && !error && <p className="mt-1 text-xs text-ink/70">{hint}</p>}
       {error && (
-        <p className="mt-1 text-sm font-medium text-danger" role="alert">
+        <p className="mt-1 animate-fade-in text-sm font-medium text-danger" role="alert">
           {error}
         </p>
       )}
@@ -155,7 +155,7 @@ export default function ChefForm({
                 aria-pressed={on}
                 disabled={locked}
                 onClick={() => toggleCuisine(name)}
-                className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
                   on ? "border-leaf bg-leaf text-white" : "border-leaf/40 hover:bg-sage"
                 }`}
               >
@@ -282,7 +282,10 @@ export default function ChefForm({
       )}
 
       {message && (
-        <p role="alert" className={message.type === "ok" ? "font-medium text-leaf" : "font-medium text-danger"}>
+        <p
+          role="alert"
+          className={`animate-scale-in ${message.type === "ok" ? "font-medium text-leaf" : "font-medium text-danger"}`}
+        >
           {message.text}
         </p>
       )}

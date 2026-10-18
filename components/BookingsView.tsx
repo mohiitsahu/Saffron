@@ -27,8 +27,14 @@ function Group({ title, hint, items }: { title: string; hint?: string; items: Bo
       <div
         className={`mt-4 grid gap-4 ${items.length > 1 ? "xl:grid-cols-2 xl:items-start" : "max-w-3xl"}`}
       >
-        {items.map((booking) => (
-          <BookingTicket key={booking.id} booking={booking} />
+        {items.map((booking, i) => (
+          <div
+            key={booking.id}
+            className="animate-fade-up"
+            style={{ animationDelay: `${Math.min(i, 6) * 60}ms` }}
+          >
+            <BookingTicket booking={booking} />
+          </div>
         ))}
       </div>
     </section>
@@ -116,8 +122,8 @@ export default function BookingsView({
   const mineOpen = asCustomer.filter(isOpen).length;
 
   const tabClass = (active: boolean) =>
-    `-mb-px flex min-h-[44px] items-center gap-2 border-b-2 px-4 text-base font-semibold transition-colors ${
-      active ? "border-leaf text-leaf" : "border-transparent text-ink/70 hover:text-ink"
+    `-mb-px flex min-h-[44px] items-center gap-2 rounded-t-lg border-b-2 px-4 text-base font-semibold transition-all duration-200 ${
+      active ? "border-leaf bg-leaf/5 text-leaf" : "border-transparent text-ink/70 hover:bg-sage/50 hover:text-ink"
     }`;
 
   return (
@@ -152,7 +158,7 @@ export default function BookingsView({
       <div className="mt-6">
         {tab === "requests" ? (
           asChef.length === 0 ? (
-            <div className="max-w-3xl rounded-2xl border-2 border-dashed border-leaf/60 bg-sage/70 p-6">
+            <div className="max-w-3xl animate-scale-in rounded-2xl border-2 border-dashed border-leaf/60 bg-sage/70 p-6 shadow-soft">
               <h2 className="text-lg font-bold">No requests yet</h2>
               <p className="mt-1 text-ink/80">They will appear here when customers book you.</p>
             </div>
@@ -160,7 +166,7 @@ export default function BookingsView({
             <BookingList items={asChef} perspective="chef" />
           )
         ) : asCustomer.length === 0 ? (
-          <div className="max-w-3xl rounded-2xl border-2 border-dashed border-leaf/60 bg-sage/70 p-6">
+          <div className="max-w-3xl animate-scale-in rounded-2xl border-2 border-dashed border-leaf/60 bg-sage/70 p-6 shadow-soft">
             <h2 className="text-lg font-bold">No bookings yet</h2>
             <p className="mt-1 text-ink/80">Your requests will show up here as tickets, with their status.</p>
             <Link href="/chefs" className={`${primaryButton} mt-4`}>

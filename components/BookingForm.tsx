@@ -14,7 +14,7 @@ type Props = {
   existingStatus: "REQUESTED" | "ACCEPTED" | null;
 };
 
-const ticketClass = "rounded-2xl border-2 border-dashed border-leaf bg-cream p-5 shadow-sm";
+const ticketClass = "rounded-2xl border-2 border-dashed border-leaf bg-cream p-5 shadow-soft";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -41,7 +41,7 @@ function Field({
       {children}
       {hint && !error && <p className="mt-1 text-xs text-ink/70">{hint}</p>}
       {error && (
-        <p className="mt-1 text-sm font-medium text-danger" role="alert">
+        <p className="mt-1 animate-fade-in text-sm font-medium text-danger" role="alert">
           {error}
         </p>
       )}
@@ -167,7 +167,7 @@ export default function BookingForm({
 
   if (sent) {
     return (
-      <section id="book" className={ticketClass} aria-live="polite">
+      <section id="book" className={`${ticketClass} animate-scale-in`} aria-live="polite">
         <h2 className="text-xl font-bold">Request sent</h2>
         <p className="mt-1 text-ink/80">
           {chefName} will accept or decline. You&apos;ll see the answer under My bookings. Their phone number
@@ -285,7 +285,7 @@ export default function BookingForm({
         </div>
 
         {message && (
-          <p role="alert" className="font-medium text-danger">
+          <p role="alert" className="animate-fade-in font-medium text-danger">
             {message}
           </p>
         )}

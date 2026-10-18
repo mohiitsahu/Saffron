@@ -233,7 +233,11 @@ export default function SearchBar({
 
   return (
     <form onSubmit={handleSubmit} role="search" aria-label="Find a chef">
-      <div className="grid rounded-2xl border border-leaf/30 bg-cream text-ink shadow-sm md:grid-cols-[1fr_1fr_auto] md:items-center">
+      <div
+        className={`grid rounded-2xl border border-leaf/30 bg-cream text-ink ${
+          hero ? "shadow-lift" : "shadow-soft"
+        } md:grid-cols-[1fr_1fr_auto] md:items-center`}
+      >
         <div
           className={`flex items-center gap-3 rounded-t-2xl border-b border-leaf/20 px-4 py-3 md:rounded-l-2xl md:rounded-tr-none md:border-b-0 md:border-r ${cellFocus}`}
         >
@@ -297,7 +301,7 @@ export default function SearchBar({
               id={listId}
               role="listbox"
               aria-label="City suggestions"
-              className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-auto rounded-xl border border-leaf/30 bg-cream py-1 shadow-lg"
+              className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 animate-slide-down overflow-auto rounded-xl border border-leaf/30 bg-cream py-1 shadow-lift"
             >
               {items.map((item, i) => (
                 <li
@@ -360,7 +364,7 @@ export default function SearchBar({
             key={label}
             type="button"
             onClick={() => pickPopular(label)}
-            className={`rounded-full border px-3 py-2 font-medium ${
+            className={`rounded-full border px-3 py-2 font-medium transition duration-200 active:scale-95 ${
               hero ? "border-white/40 hover:bg-white/15" : "border-leaf/30 hover:bg-sage"
             }`}
           >

@@ -60,7 +60,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
 
   return (
     <div className="mx-auto w-full max-w-md px-4 py-12">
-      <div className="rounded-2xl border-2 border-dashed border-leaf bg-sage/70 p-6 sm:p-8">
+      <div className="animate-fade-up rounded-2xl border-2 border-dashed border-leaf bg-sage/70 p-6 shadow-lift sm:p-8">
         <p className="font-heading text-sm font-bold uppercase tracking-widest text-leaf">Welcome</p>
         <h1 className="mt-1 text-3xl font-bold">Sign in to Saffron</h1>
         <p className="mt-3 text-ink/80">
@@ -71,7 +71,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
         {errorMessage && (
           <p
             role="alert"
-            className="mt-4 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm font-medium text-danger"
+            className="mt-4 animate-scale-in rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm font-medium text-danger"
           >
             {errorMessage}
           </p>

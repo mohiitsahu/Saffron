@@ -60,7 +60,7 @@ export default async function CookWithUsPage() {
           />
         </div>
 
-        <aside className="rounded-2xl border-2 border-dashed border-leaf/60 bg-sage p-5 lg:sticky lg:top-20">
+        <aside className="rounded-2xl border-2 border-dashed border-leaf/60 bg-sage p-5 shadow-soft lg:sticky lg:top-20">
           <h2 className="text-lg font-bold">Tips for a great profile</h2>
           <ul className="mt-3 space-y-3 text-sm">
             {tips.map((tip) => (

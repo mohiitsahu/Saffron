@@ -213,7 +213,7 @@ export default function BookingTicket({
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm font-medium text-danger">
+        <p role="alert" className="mt-3 animate-fade-in text-sm font-medium text-danger">
           {error}
         </p>
       )}
@@ -228,7 +228,7 @@ export default function BookingTicket({
 
   if (collapsible) {
     return (
-      <article className="rounded-2xl border border-leaf/30 bg-cream p-4">
+      <article className="rounded-2xl border border-leaf/30 bg-cream p-4 shadow-soft transition duration-200 hover:border-leaf/50 hover:shadow-lift">
         <button
           type="button"
           aria-expanded={open}
@@ -253,13 +253,13 @@ export default function BookingTicket({
             </span>
           </span>
         </button>
-        {open && <div className="mt-4 border-t border-dashed border-leaf/50 pt-4">{body}</div>}
+        {open && <div className="mt-4 animate-fade-in border-t border-dashed border-leaf/50 pt-4">{body}</div>}
       </article>
     );
   }
 
   return (
-    <article className="rounded-2xl border-2 border-dashed border-leaf/60 bg-cream p-5">
+    <article className="rounded-2xl border-2 border-dashed border-leaf/60 bg-cream p-5 shadow-soft transition-shadow duration-300 hover:shadow-lift">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-heading text-xs font-bold uppercase tracking-widest text-leaf">

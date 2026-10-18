@@ -12,10 +12,10 @@ function Dot({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
     <>
-      <span
-        aria-hidden="true"
-        className="absolute -right-2.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-forest"
-      />
+      <span aria-hidden="true" className="absolute -right-2.5 -top-0.5 flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-saffron opacity-60" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-forest" />
+      </span>
       <span className="sr-only">
         ({count} new {count === 1 ? "request" : "requests"})
       </span>
@@ -71,11 +71,12 @@ export default function NavMenu({
     };
   }, [isChef]);
 
+  // The gold underline slides in on hover and stays on the page you are on.
   const itemClass = (href: string) =>
-    `flex min-h-[44px] items-center rounded-md px-3 text-base font-medium text-cream hover:bg-white/10 focus-visible:outline-cream ${
+    `relative flex min-h-[44px] items-center rounded-md px-3 text-base font-medium transition-colors hover:bg-white/10 focus-visible:outline-cream after:absolute after:inset-x-3 after:bottom-1.5 after:h-0.5 after:origin-left after:rounded-full after:bg-saffron after:transition-transform after:duration-300 ${
       pathname === href || pathname.startsWith(href + "/")
-        ? "underline decoration-saffron decoration-2 underline-offset-8"
-        : ""
+        ? "text-white after:scale-x-100"
+        : "text-cream/90 after:scale-x-0 hover:text-white hover:after:scale-x-100"
     }`;
 
   const label = (link: NavLink) => (
@@ -114,7 +115,7 @@ export default function NavMenu({
 
       <button
         type="button"
-        className="relative flex h-11 w-11 items-center justify-center rounded-md border border-white/30 text-cream focus-visible:outline-cream md:hidden"
+        className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-white/30 text-cream transition duration-200 hover:bg-white/10 active:scale-95 focus-visible:outline-cream md:hidden"
         aria-expanded={open}
         aria-controls="mobile-menu"
         aria-label={menuLabel}
@@ -135,7 +136,7 @@ export default function NavMenu({
         <nav
           id="mobile-menu"
           aria-label="Mobile"
-          className="absolute inset-x-0 top-full border-b border-white/10 bg-forest px-4 pb-4 pt-2 shadow-lg md:hidden"
+          className="absolute inset-x-0 top-full animate-slide-down border-b border-white/10 bg-forest px-4 pb-4 pt-2 shadow-lg md:hidden"
         >
           <ul className="space-y-1">
             {links.map((link) => (

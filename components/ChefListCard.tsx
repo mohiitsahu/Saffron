@@ -33,20 +33,20 @@ export default function ChefListCard({
   return (
     <Link
       href={`/chefs/${chef.id}`}
-      className="flex flex-col overflow-hidden rounded-2xl border border-leaf/25 bg-cream transition-shadow hover:border-leaf hover:shadow-lg md:flex-row"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-leaf/25 bg-cream shadow-soft transition duration-300 hover:border-leaf/60 hover:shadow-lift md:flex-row motion-safe:hover:-translate-y-0.5"
     >
-      <div className="relative h-52 w-full flex-none md:h-auto md:min-h-[14rem] md:w-1/3">
+      <div className="relative h-52 w-full flex-none overflow-hidden md:h-auto md:min-h-[14rem] md:w-1/3">
         {chef.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={chef.photoUrl}
             alt={chef.displayName}
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />
         ) : (
           <div
             aria-hidden="true"
-            className="absolute inset-0 flex items-center justify-center bg-sage font-heading text-7xl font-bold text-leaf"
+            className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-sage to-cream font-heading text-7xl font-bold text-leaf transition-transform duration-700 ease-out group-hover:scale-105"
           >
             {chef.displayName.charAt(0).toUpperCase()}
           </div>
@@ -108,9 +108,9 @@ export default function ChefListCard({
           <p className="text-ink/70">
             <span className="text-2xl font-bold text-ink">{formatINR(chef.pricePerPerson)}</span> / guest
           </p>
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-leaf px-4 py-2 text-sm font-semibold text-white">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-leaf px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-200 group-hover:bg-forest">
             Request a chef
-            <ArrowUpRightIcon className="h-4 w-4" />
+            <ArrowUpRightIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
           </span>
         </div>
       </div>

@@ -133,7 +133,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
       </div>
 
       {visible.length === 0 ? (
-        <div className="mt-6 rounded-2xl border-2 border-dashed border-leaf/50 bg-sage/70 p-8 text-center">
+        <div className="mt-6 animate-scale-in rounded-2xl border-2 border-dashed border-leaf/50 bg-sage/70 p-8 text-center shadow-soft">
           <h2 className="text-xl font-bold">No chefs match yet</h2>
           <p className="mx-auto mt-2 max-w-md text-ink/80">
             Try a different city or cuisine, or raise the maximum price. Know a great home chef? Invite
@@ -147,10 +147,11 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
         </div>
       ) : (
         <div className="mt-6 grid gap-5 xl:grid-cols-2">
-          {visible.map((chef) => (
+          {visible.map((chef, i) => (
             <div
               key={chef.id}
-              className={`h-full [&>a]:h-full ${visible.length === 1 ? "xl:col-span-2" : ""}`}
+              style={{ animationDelay: `${Math.min(i, 7) * 60}ms` }}
+              className={`h-full animate-fade-up [&>a]:h-full ${visible.length === 1 ? "xl:col-span-2" : ""}`}
             >
               <ChefListCard
                 chef={chef}

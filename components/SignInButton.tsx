@@ -14,7 +14,7 @@ export default function SignInButton({ callbackUrl }: { callbackUrl: string }) {
         setLoading(true);
         void signIn("google", { callbackUrl });
       }}
-      className="inline-flex min-h-[48px] w-full items-center justify-center gap-3 rounded-md border border-leaf/50 bg-cream px-5 py-2.5 text-base font-semibold text-ink transition-colors hover:bg-sage/70 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex min-h-[48px] w-full items-center justify-center gap-3 rounded-lg border border-leaf/50 bg-cream px-5 py-2.5 text-base font-semibold text-ink shadow-sm transition duration-200 hover:bg-sage/70 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
         <path

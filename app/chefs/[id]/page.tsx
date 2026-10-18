@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { firstName, formatDateIST, formatINR, menuLines } from "@/lib/format";
 import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import BookingForm from "@/components/BookingForm";
+import Reveal from "@/components/Reveal";
 import { primaryButton } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -85,22 +86,28 @@ export default async function ChefProfilePage({ params }: { params: { id: string
 
   return (
     <div className="mx-auto w-full max-w-screen-2xl px-4 py-8">
-      <Link href="/chefs" className="text-sm font-medium text-leaf underline underline-offset-4">
-        ← Back to chefs
+      <Link
+        href="/chefs"
+        className="group inline-flex items-center gap-1 text-sm font-medium text-leaf underline underline-offset-4"
+      >
+        <span aria-hidden="true" className="transition-transform duration-200 group-hover:-translate-x-1">
+          ←
+        </span>
+        Back to chefs
       </Link>
 
-      <header className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
+      <header className="mt-4 flex animate-fade-up flex-col gap-5 sm:flex-row sm:items-center">
         {chef.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={chef.photoUrl}
             alt={chef.displayName}
-            className="h-48 w-full flex-none rounded-2xl object-cover sm:h-44 sm:w-44"
+            className="h-48 w-full flex-none rounded-2xl object-cover shadow-soft ring-4 ring-sage sm:h-44 sm:w-44"
           />
         ) : (
           <div
             aria-hidden="true"
-            className="flex h-48 w-full flex-none items-center justify-center rounded-2xl bg-sage font-heading text-6xl font-bold text-leaf sm:h-44 sm:w-44"
+            className="flex h-48 w-full flex-none items-center justify-center rounded-2xl bg-gradient-to-br from-sage to-cream font-heading text-6xl font-bold text-leaf shadow-soft ring-4 ring-sage sm:h-44 sm:w-44"
           >
             {chef.displayName.charAt(0).toUpperCase()}
           </div>
@@ -152,7 +159,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="space-y-8">
-          <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-leaf/25 p-5 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-leaf/25 bg-white/40 p-5 shadow-soft sm:grid-cols-4">
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-ink/60">Price</dt>
               <dd className="mt-0.5 font-bold">{formatINR(chef.pricePerPerson)} / guest</dd>
@@ -176,19 +183,25 @@ export default async function ChefProfilePage({ params }: { params: { id: string
             <p className="mt-2 max-w-3xl whitespace-pre-line">{chef.bio}</p>
           </section>
 
+          <Reveal>
           {menu.length > 0 && (
             <section>
               <h2 className="text-2xl font-bold">Sample menu</h2>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {menu.map((dish, i) => (
-                  <li key={i} className="rounded-lg bg-sage px-4 py-2.5 text-sm font-medium">
+                  <li
+                    key={i}
+                    className="rounded-lg bg-sage px-4 py-2.5 text-sm font-medium transition duration-200 hover:bg-saffron/25 motion-safe:hover:-translate-y-0.5"
+                  >
                     {dish}
                   </li>
                 ))}
               </ul>
             </section>
           )}
+          </Reveal>
 
+          <Reveal>
           <section className="rounded-2xl border-2 border-dashed border-leaf/60 p-5">
             <h2 className="text-2xl font-bold">What to expect</h2>
             <ol className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -202,7 +215,9 @@ export default async function ChefProfilePage({ params }: { params: { id: string
               ))}
             </ol>
           </section>
+          </Reveal>
 
+          <Reveal>
           <section>
             <h2 className="text-2xl font-bold">Reviews</h2>
             {reviews.length === 0 ? (
@@ -212,7 +227,10 @@ export default async function ChefProfilePage({ params }: { params: { id: string
             ) : (
               <ul className="mt-3 grid gap-4 xl:grid-cols-2">
                 {reviews.map((review) => (
-                  <li key={review.id} className="rounded-2xl border border-leaf/25 p-4">
+                  <li
+                    key={review.id}
+                    className="rounded-2xl border border-leaf/25 bg-white/40 p-4 shadow-soft transition duration-200 hover:shadow-lift"
+                  >
                     <p className="text-saffron" aria-label={`${review.rating} out of 5 stars`}>
                       {"★".repeat(review.rating)}
                       {"☆".repeat(5 - review.rating)}
@@ -226,6 +244,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
               </ul>
             )}
           </section>
+          </Reveal>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
@@ -238,7 +257,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
             existingStatus={existingStatus}
           />
 
-          <div className="rounded-2xl bg-sage p-5">
+          <div className="rounded-2xl bg-sage p-5 shadow-soft">
             <h2 className="font-bold">Booking safely</h2>
             <ul className="mt-3 space-y-2.5 text-sm">
               <li className="flex gap-2.5">

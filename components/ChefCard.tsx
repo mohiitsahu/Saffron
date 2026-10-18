@@ -27,19 +27,25 @@ export default function ChefCard({
   return (
     <Link
       href={`/chefs/${chef.id}`}
-      className="flex flex-col overflow-hidden rounded-2xl border border-leaf/25 bg-cream transition-shadow hover:border-leaf hover:shadow-lg"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-leaf/25 bg-cream shadow-soft transition duration-300 hover:border-leaf/60 hover:shadow-lift motion-safe:hover:-translate-y-1"
     >
-      {chef.photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={chef.photoUrl} alt={chef.displayName} className="h-44 w-full object-cover" />
-      ) : (
-        <div
-          aria-hidden="true"
-          className="flex h-44 w-full items-center justify-center bg-sage font-heading text-5xl font-bold text-leaf"
-        >
-          {chef.displayName.charAt(0).toUpperCase()}
-        </div>
-      )}
+      <div className="overflow-hidden">
+        {chef.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={chef.photoUrl}
+            alt={chef.displayName}
+            className="h-44 w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="flex h-44 w-full items-center justify-center bg-gradient-to-br from-sage to-cream font-heading text-5xl font-bold text-leaf transition-transform duration-700 ease-out group-hover:scale-105"
+          >
+            {chef.displayName.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-1 flex-col p-4">
         <div className="flex flex-wrap items-center gap-2">
