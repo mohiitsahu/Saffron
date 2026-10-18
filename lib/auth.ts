@@ -24,11 +24,21 @@ export const authOptions: NextAuthOptions = {
           where: { id: token.id as string },
           select: { role: true },
         });
-        token.role = dbUser?.role ?? "CUSTOMER";
+        // The account no longer exists (it was deleted): drop the login instead of
+        // letting a ghost session fail later with confusing errors.
+        if (!dbUser) return {};
+        token.role = dbUser.role;
       }
       return token;
     },
     async session({ session, token }) {
+      // No user id means the login was dropped above. Return a session with no user,
+      // which every page and API route already treats as "signed out".
+      if (!token.id) {
+        const { user: _removed, ...rest } = session;
+        void _removed;
+        return rest as unknown as typeof session;
+      }
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "CUSTOMER" | "CHEF" | "ADMIN";

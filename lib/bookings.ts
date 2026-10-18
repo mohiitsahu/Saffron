@@ -99,6 +99,54 @@ export function serializeBooking(booking: BookingRow, viewerId: string): Booking
   };
 }
 
+// An accepted booking the chef never marked as completed closes itself this long after the event.
+const AUTO_COMPLETE_AFTER_MS = 72 * 60 * 60 * 1000;
+
+// Tidies up bookings that nobody answered or closed, so they can't block anyone forever:
+// - A request still waiting when its event time passes becomes EXPIRED.
+// - An accepted booking becomes COMPLETED 72 hours after the event if the chef never closed it.
+// Runs when pages load. Safe to call often and from two places at once.
+export async function settleStaleBookings(scope: Prisma.BookingWhereInput = {}) {
+  try {
+    const now = Date.now();
+    const stale = await prisma.booking.findMany({
+      where: {
+        AND: [
+          scope,
+          {
+            OR: [
+              { status: "REQUESTED", eventDate: { lte: new Date(now) } },
+              { status: "ACCEPTED", eventDate: { lte: new Date(now - AUTO_COMPLETE_AFTER_MS) } },
+            ],
+          },
+        ],
+      },
+      select: { id: true, status: true },
+      take: 200,
+    });
+    if (stale.length === 0) return;
+
+    await prisma.$transaction(async (tx) => {
+      for (const booking of stale) {
+        const next: BookingStatus = booking.status === "REQUESTED" ? "EXPIRED" : "COMPLETED";
+        // Only change it if nobody else changed it first.
+        const result = await tx.booking.updateMany({
+          where: { id: booking.id, status: booking.status },
+          data: { status: next },
+        });
+        if (result.count === 1) {
+          await tx.bookingEvent.create({
+            data: { bookingId: booking.id, actorId: null, fromStatus: booking.status, toStatus: next },
+          });
+        }
+      }
+    });
+  } catch (error) {
+    // Tidying up must never break the page that triggered it.
+    console.error("settleStaleBookings failed", error);
+  }
+}
+
 export type BookingAction = "accept" | "decline" | "cancel" | "complete";
 
 type Transition =
@@ -140,6 +188,10 @@ export function resolveTransition(
       if (booking.status !== "REQUESTED" && booking.status !== "ACCEPTED") {
         return fail(409, "Only requested or accepted bookings can be cancelled.");
       }
+      // Once the event time has passed, a booking is closed by completing it, not cancelling it.
+      if (booking.eventDate.getTime() <= now.getTime()) {
+        return fail(409, "The event time has passed, so this can't be cancelled.");
+      }
       // A chef answers a new request with Accept or Decline. Cancel is only for accepted bookings.
       if (role === "chef" && booking.status === "REQUESTED") {
         return fail(409, "Decline this request instead of cancelling it.");
@@ -162,6 +214,8 @@ export function resolveTransition(
 }
 
 export async function getBookingsFor(userId: string) {
+  await settleStaleBookings({ OR: [{ customerId: userId }, { chefId: userId }] });
+
   const rows = await prisma.booking.findMany({
     where: { OR: [{ customerId: userId }, { chefId: userId }] },
     orderBy: { eventDate: "desc" },

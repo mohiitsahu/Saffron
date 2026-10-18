@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { photoIdFromUrl } from "@/lib/photos";
 
 function isHttpUrl(value: string) {
   try {
@@ -24,6 +25,17 @@ const phoneSchema = z
   .trim()
   .transform((v) => v.replace(/[\s-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, ""))
   .refine((v) => /^[6-9]\d{9}$/.test(v), "Enter a 10-digit Indian mobile number.");
+
+// "2026-02-30T19:00" matches the pattern but isn't a real date, and JavaScript would quietly
+// turn it into 2 March. This checks that the date and time survive a round trip unchanged.
+function isRealDateTime(value: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!m) return false;
+  const [year, month, day, hour, minute] = m.slice(1).map(Number);
+  if (year < 2000 || hour > 23 || minute > 59) return false;
+  const d = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
+}
 
 export const chefProfileSchema = z.object({
   displayName: z
@@ -67,7 +79,11 @@ export const chefProfileSchema = z.object({
     .trim()
     .max(500, "Photo link is too long.")
     .default("")
-    .refine((v) => v === "" || isHttpUrl(v), "Photo link must start with http:// or https://.")
+    // Either one of our own uploaded photos, or an older https link saved before uploads existed.
+    .refine(
+      (v) => v === "" || photoIdFromUrl(v) !== null || (isHttpUrl(v) && v.startsWith("https://")),
+      "Upload a photo instead of using a link."
+    )
     .transform((v) => (v === "" ? null : v)),
   sampleMenu: z.string().trim().max(2000, "Sample menu must be 2000 characters or fewer.").default(""),
   active: z.boolean().default(true),
@@ -80,6 +96,7 @@ export const bookingCreateSchema = z.object({
     .string()
     .trim()
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Choose a date and time.")
+    .refine(isRealDateTime, "That date doesn't exist. Choose a valid date and time.")
     .transform((v) => new Date(`${v}:00+05:30`))
     .refine((d) => !Number.isNaN(d.getTime()), "Choose a valid date and time."),
   guests: z.coerce

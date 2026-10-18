@@ -14,6 +14,7 @@ const STATUS: Record<BookingView["status"], { label: string; className: string }
   COMPLETED: { label: "Completed", className: "bg-sage text-ink" },
   DECLINED: { label: "Declined", className: "border border-danger text-danger" },
   CANCELLED: { label: "Cancelled", className: "border border-danger text-danger" },
+  EXPIRED: { label: "Expired", className: "border border-ink/40 text-ink/70" },
 };
 
 export default function BookingTicket({
@@ -38,7 +39,8 @@ export default function BookingTicket({
   // Customer: can cancel (withdraw) a requested or accepted booking.
   const canAccept = isChef && isRequested && !booking.eventPassed;
   const canDecline = isChef && isRequested;
-  const canCancel = isChef ? isAccepted : isRequested || isAccepted;
+  // After the event time a booking is closed by completing it, not by cancelling.
+  const canCancel = !booking.eventPassed && (isChef ? isAccepted : isRequested || isAccepted);
   const canComplete = isChef && isAccepted && booking.eventPassed;
   const status = STATUS[booking.status];
   const shortId = booking.id.slice(-6).toUpperCase();
@@ -193,8 +195,8 @@ export default function BookingTicket({
       {isAccepted && !(isChef && booking.eventPassed) && (
         <p className="mt-3 text-xs text-ink/70">
           {isChef
-            ? "You can mark this completed after the event time."
-            : "Your chef marks the booking completed after the event, then you can leave a review."}
+            ? "You can mark this completed after the event time. It closes automatically 3 days after the event."
+            : "Your chef marks the booking completed after the event, then you can leave a review. It closes automatically 3 days after the event if they don't."}
         </p>
       )}
 

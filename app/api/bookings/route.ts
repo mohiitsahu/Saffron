@@ -3,12 +3,16 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { bookingSelect, getBookingsFor, serializeBooking } from "@/lib/bookings";
+import { bookingSelect, getBookingsFor, serializeBooking, settleStaleBookings } from "@/lib/bookings";
 import { bookingCreateSchema, fieldErrors } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
 const MIN_NOTICE_MS = 24 * 60 * 60 * 1000;
+const MAX_ADVANCE_MS = 365 * 24 * 60 * 60 * 1000;
+// Limits that stop one person flooding chefs with requests.
+const MAX_OPEN_REQUESTS = 5;
+const MAX_REQUESTS_PER_HOUR = 10;
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -64,6 +68,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "You can't book your own profile." }, { status: 400 });
   }
 
+  // Old unanswered requests expire first, so they don't block this one or count towards the limits.
+  await settleStaleBookings({ customerId: userId });
+
+  const [openRequests, recentRequests] = await Promise.all([
+    prisma.booking.count({ where: { customerId: userId, status: "REQUESTED" } }),
+    prisma.booking.count({ where: { customerId: userId, createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) } } }),
+  ]);
+  if (openRequests >= MAX_OPEN_REQUESTS) {
+    return NextResponse.json(
+      {
+        error: `You already have ${MAX_OPEN_REQUESTS} requests waiting for an answer. Wait for a chef to reply, or cancel one, before sending another.`,
+      },
+      { status: 429 }
+    );
+  }
+  if (recentRequests >= MAX_REQUESTS_PER_HOUR) {
+    return NextResponse.json(
+      { error: "You've sent a lot of requests in the last hour. Please try again a little later." },
+      { status: 429 }
+    );
+  }
+
   // One open request per chef: only pending or accepted requests block a new one.
   // Declined, completed and cancelled bookings don't, so customers can book a chef again.
   const existing = await prisma.booking.findFirst({
@@ -88,6 +114,8 @@ export async function POST(req: Request) {
   }
   if (eventDate.getTime() - Date.now() < MIN_NOTICE_MS) {
     problems.eventDate = "Choose a time at least 24 hours from now.";
+  } else if (eventDate.getTime() - Date.now() > MAX_ADVANCE_MS) {
+    problems.eventDate = "Choose a date within the next year.";
   }
   if (Object.keys(problems).length > 0) {
     return NextResponse.json(

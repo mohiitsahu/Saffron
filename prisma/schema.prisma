@@ -22,6 +22,7 @@ enum BookingStatus {
   DECLINED
   CANCELLED
   COMPLETED
+  EXPIRED
 }
 
 model User {
@@ -38,6 +39,7 @@ model User {
   sessions Session[]
 
   chefProfile      ChefProfile?
+  chefPhoto        ChefPhoto?
   customerBookings Booking[] @relation("CustomerBookings")
   chefBookings     Booking[] @relation("ChefBookings")
   reviewsWritten   Review[]  @relation("ReviewCustomer")
@@ -99,6 +101,18 @@ model ChefProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([city, active])
+}
+
+// The chef's uploaded photo. The browser shrinks it before upload, so each row is small
+// (about 100 KB). Kept in its own table so list queries never load the image bytes.
+model ChefPhoto {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  contentType String
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Booking {

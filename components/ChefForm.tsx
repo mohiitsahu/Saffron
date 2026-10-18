@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CUISINE_OPTIONS, MAX_CUISINES } from "@/lib/cuisines";
 import { inputClass, labelClass, primaryButton } from "@/lib/ui";
+import PhotoUpload from "@/components/PhotoUpload";
 
 export type ChefFormValues = {
   displayName: string;
@@ -116,7 +117,8 @@ export default function ChefForm({
       }
 
       setMessage({ type: "ok", text: "Profile saved." });
-      router.push("/chef"); router.push("/chef"); router.refresh();
+      router.push("/chef");
+      router.refresh();
     } catch {
       setMessage({ type: "error", text: "Network problem. Check your connection and try again." });
     } finally {
@@ -253,21 +255,12 @@ export default function ChefForm({
         />
       </Field>
 
-      <Field
-        label="Photo link (optional)"
-        htmlFor="photoUrl"
+      <PhotoUpload
+        value={values.photoUrl}
+        onChange={(url) => set("photoUrl", url)}
+        name={values.displayName}
         error={errors.photoUrl}
-        hint="Paste a link to a photo of you or your food."
-      >
-        <input
-          id="photoUrl"
-          type="url"
-          inputMode="url"
-          className={inputClass}
-          value={values.photoUrl}
-          onChange={(e) => set("photoUrl", e.target.value)}
-        />
-      </Field>
+      />
 
       {isExisting && (
         <label className="flex min-h-[44px] items-center gap-3 text-base">

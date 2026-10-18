@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { chefProfileSchema } from "@/lib/validation";
+import { photoIdFromUrl } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,21 @@ async function save(req: Request) {
 
   const { phone, ...data } = parsed.data;
   const userId = session.user.id;
+
+  // A photo link may only point at a photo this person uploaded themselves.
+  const photoId = data.photoUrl ? photoIdFromUrl(data.photoUrl) : null;
+  if (photoId) {
+    const own = await prisma.chefPhoto.findFirst({ where: { id: photoId, userId }, select: { id: true } });
+    if (!own) {
+      return NextResponse.json(
+        {
+          error: "Some details need fixing. Check the highlighted fields.",
+          fieldErrors: { photoUrl: "That photo isn't yours. Upload your own photo." },
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   // One transaction: save the profile, store the phone, and upgrade
   // CUSTOMER to CHEF. ADMIN and existing CHEF roles are left alone.
