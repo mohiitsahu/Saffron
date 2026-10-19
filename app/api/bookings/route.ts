@@ -9,12 +9,23 @@ import { istDayKey } from "@/lib/availability";
 import { notifyBooking } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const MIN_NOTICE_MS = 24 * 60 * 60 * 1000;
 const MAX_ADVANCE_MS = 365 * 24 * 60 * 60 * 1000;
-// Limits that stop one person flooding chefs with requests.
 const MAX_OPEN_REQUESTS = 5;
 const MAX_REQUESTS_PER_HOUR = 10;
+
+type ErrorResult = {
+  ok: false;
+  status: number;
+  error: string;
+  fieldErrors?: Record<string, string>;
+};
+
+function refused(status: number, error: string, fieldErrors?: Record<string, string>): ErrorResult {
+  return { ok: false, status, error, ...(fieldErrors ? { fieldErrors } : {}) };
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -49,7 +60,10 @@ export async function POST(req: Request) {
   }
 
   const { chefProfileId, eventDate, guests, area, address, phone, notes } = parsed.data;
-  const userId = session.user.id;
+  const customerId = session.user.id;
+
+  // Expire old requests before the transactional quota check.
+  await settleStaleBookings({ customerId });
 
   const chef = await prisma.chefProfile.findUnique({
     where: { id: chefProfileId },
@@ -63,93 +77,102 @@ export async function POST(req: Request) {
       user: { select: { name: true, email: true } },
     },
   });
-
   if (!chef || !chef.active) {
     return NextResponse.json({ error: "This chef isn't taking requests right now." }, { status: 404 });
   }
-  if (chef.userId === userId) {
+  if (chef.userId === customerId) {
     return NextResponse.json({ error: "You can't book your own profile." }, { status: 400 });
   }
 
-  // Old unanswered requests expire first, so they don't block this one or count towards the limits.
-  await settleStaleBookings({ customerId: userId });
-
-  const [openRequests, recentRequests] = await Promise.all([
-    prisma.booking.count({ where: { customerId: userId, status: "REQUESTED" } }),
-    prisma.booking.count({ where: { customerId: userId, createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) } } }),
-  ]);
-  if (openRequests >= MAX_OPEN_REQUESTS) {
-    return NextResponse.json(
-      {
-        error: `You already have ${MAX_OPEN_REQUESTS} requests waiting for an answer. Wait for a chef to reply, or cancel one, before sending another.`,
-      },
-      { status: 429 }
-    );
-  }
-  if (recentRequests >= MAX_REQUESTS_PER_HOUR) {
-    return NextResponse.json(
-      { error: "You've sent a lot of requests in the last hour. Please try again a little later." },
-      { status: 429 }
-    );
-  }
-
-  // One open request per chef: only pending or accepted requests block a new one.
-  // Declined, completed and cancelled bookings don't, so customers can book a chef again.
-  const existing = await prisma.booking.findFirst({
-    where: {
-      customerId: userId,
-      chefId: chef.userId,
-      status: { in: ["REQUESTED", "ACCEPTED"] },
-    },
-    select: { status: true },
-  });
-  if (existing) {
-    const message =
-      existing.status === "REQUESTED"
-        ? "You already have a pending request with this chef. Check My bookings for their answer."
-        : "You already have an accepted booking with this chef. See it under My bookings.";
-    return NextResponse.json({ error: message }, { status: 409 });
-  }
-
-  const problems: Record<string, string> = {};
+  // Validate inexpensive rules before we lock database rows.
+  const issues: Record<string, string> = {};
   if (guests > chef.maxGuests) {
-    problems.guests = `${chef.displayName} can cook for up to ${chef.maxGuests} guests. Lower the number and try again.`;
+    issues.guests = `${chef.displayName} can cook for up to ${chef.maxGuests} guests. Lower the number and try again.`;
   }
-  if (eventDate.getTime() - Date.now() < MIN_NOTICE_MS) {
-    problems.eventDate = "Choose a time at least 24 hours from now.";
-  } else if (eventDate.getTime() - Date.now() > MAX_ADVANCE_MS) {
-    problems.eventDate = "Choose a date within the next year.";
+  const advanceMs = eventDate.getTime() - Date.now();
+  if (advanceMs < MIN_NOTICE_MS) {
+    issues.eventDate = "Choose a time at least 24 hours from now.";
+  } else if (advanceMs > MAX_ADVANCE_MS) {
+    issues.eventDate = "Choose a date within the next year.";
   }
-  // The chef may have marked this day as unavailable.
-  if (!problems.eventDate) {
-    const blockedDay = await prisma.chefBlockedDay.findUnique({
-      where: { userId_day: { userId: chef.userId, day: istDayKey(eventDate) } },
-      select: { id: true },
-    });
-    if (blockedDay) {
-      problems.eventDate = `${chef.displayName} isn't available on that day. Choose another day.`;
-    }
-  }
-  if (Object.keys(problems).length > 0) {
+  if (Object.keys(issues).length > 0) {
     return NextResponse.json(
-      { error: "Some details need fixing. Check the highlighted fields.", fieldErrors: problems },
+      { error: "Some details need fixing. Check the highlighted fields.", fieldErrors: issues },
       { status: 400 }
     );
   }
 
-  // The total is always calculated here, never taken from the browser.
-  const estimatedTotal = guests * chef.pricePerPerson;
-
   try {
-    // The booking and its first log entry are saved together or not at all.
-    const booking = await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
+      // Serialize creates for a customer (quota enforcement), and any chef's booking
+      // against that chef's blocked-day writes. Sorting avoids cross-user deadlocks.
+      for (const id of [customerId, chef.userId].sort()) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+      }
+
+      // Re-check chef activity and capacity after obtaining the chef lock.
+      const currentChef = await tx.chefProfile.findUnique({
+        where: { id: chefProfileId },
+        select: { active: true, maxGuests: true, pricePerPerson: true, city: true },
+      });
+      if (!currentChef?.active) {
+        return refused(404, "This chef isn't taking requests right now.");
+      }
+      if (guests > currentChef.maxGuests) {
+        return refused(400, "Some details need fixing. Check the highlighted fields.", {
+          guests: `${chef.displayName} can cook for up to ${currentChef.maxGuests} guests. Lower the number and try again.`,
+        });
+      }
+      const now = Date.now();
+      if (eventDate.getTime() - now < MIN_NOTICE_MS || eventDate.getTime() - now > MAX_ADVANCE_MS) {
+        return refused(400, "Some details need fixing. Check the highlighted fields.", {
+          eventDate: "Choose a date at least 24 hours away and within the next year.",
+        });
+      }
+
+      const [openRequests, recentRequests, existing, blockedDay] = await Promise.all([
+        tx.booking.count({ where: { customerId, status: "REQUESTED" } }),
+        tx.booking.count({
+          where: { customerId, createdAt: { gt: new Date(now - 60 * 60 * 1000) } },
+        }),
+        tx.booking.findFirst({
+          where: { customerId, chefId: chef.userId, status: { in: ["REQUESTED", "ACCEPTED"] } },
+          select: { status: true },
+        }),
+        tx.chefBlockedDay.findUnique({
+          where: { userId_day: { userId: chef.userId, day: istDayKey(eventDate) } },
+          select: { id: true },
+        }),
+      ]);
+
+      if (openRequests >= MAX_OPEN_REQUESTS) {
+        return refused(429, `You already have ${MAX_OPEN_REQUESTS} requests waiting for an answer. Wait for a chef to reply, or cancel one, before sending another.`);
+      }
+      if (recentRequests >= MAX_REQUESTS_PER_HOUR) {
+        return refused(429, "You've sent a lot of requests in the last hour. Please try again a little later.");
+      }
+      if (existing) {
+        return refused(
+          409,
+          existing.status === "REQUESTED"
+            ? "You already have a pending request with this chef. Check My bookings for their answer."
+            : "You already have an accepted booking with this chef. See it under My bookings."
+        );
+      }
+      if (blockedDay) {
+        return refused(400, "Some details need fixing. Check the highlighted fields.", {
+          eventDate: `${chef.displayName} isn't available on that day. Choose another day.`,
+        });
+      }
+
+      const estimatedTotal = guests * currentChef.pricePerPerson;
       const created = await tx.booking.create({
         data: {
-          customerId: userId,
+          customerId,
           chefId: chef.userId,
           eventDate,
           guests,
-          city: chef.city,
+          city: currentChef.city,
           area,
           address,
           phone,
@@ -158,20 +181,25 @@ export async function POST(req: Request) {
         },
         select: bookingSelect,
       });
-
       await tx.bookingEvent.create({
-        data: { bookingId: created.id, actorId: userId, fromStatus: null, toStatus: "REQUESTED" },
+        data: { bookingId: created.id, actorId: customerId, fromStatus: null, toStatus: "REQUESTED" },
       });
+      return { ok: true as const, booking: created, estimatedTotal };
+    }, { maxWait: 10_000, timeout: 15_000 });
 
-      return created;
-    });
+    if (!outcome.ok) {
+      return NextResponse.json(
+        { error: outcome.error, ...(outcome.fieldErrors ? { fieldErrors: outcome.fieldErrors } : {}) },
+        { status: outcome.status }
+      );
+    }
 
-    // Tell the chef. This never fails the request: if email is down, the booking still stands.
+    // Notification is best effort; a failed email must never undo a saved booking.
     await notifyBooking("requested", {
       eventDate,
       guests,
       area,
-      estimatedTotal,
+      estimatedTotal: outcome.estimatedTotal,
       customer: { name: session.user.name ?? null, email: session.user.email ?? null },
       chef: {
         name: chef.user.name,
@@ -180,13 +208,20 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ booking: serializeBooking(booking, userId) }, { status: 201 });
+    return NextResponse.json({ booking: serializeBooking(outcome.booking, customerId) }, { status: 201 });
   } catch (error) {
-    // Two clicks at once: the database rule lets only one open request through.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return NextResponse.json(
         { error: "You already have an open request with this chef. Check My bookings." },
         { status: 409 }
+      );
+    }
+    // Transaction conflicts/timeouts are temporary; returning 503 avoids falsely
+    // telling the customer that their booking was definitely saved.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2034", "P2028"].includes(error.code)) {
+      return NextResponse.json(
+        { error: "We're handling several requests right now. Check My bookings before trying again." },
+        { status: 503 }
       );
     }
     throw error;

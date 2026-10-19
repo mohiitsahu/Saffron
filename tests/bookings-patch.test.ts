@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     bookingEvent: { create: vi.fn() },
+    chefBlockedDay: { findUnique: vi.fn() },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -51,9 +52,11 @@ beforeEach(() => {
       $executeRaw: mocks.prisma.$executeRaw,
       booking: mocks.prisma.booking,
       bookingEvent: mocks.prisma.bookingEvent,
+      chefBlockedDay: mocks.prisma.chefBlockedDay,
     })
   );
   mocks.prisma.booking.findFirst.mockResolvedValue(null);
+  mocks.prisma.chefBlockedDay.findUnique.mockResolvedValue(null);
   mocks.prisma.booking.updateMany.mockResolvedValue({ count: 1 });
 });
 
@@ -112,6 +115,16 @@ describe("PATCH /api/bookings/[id]: emails", () => {
     mocks.session.mockResolvedValue({ user: { id: "stranger" } });
     setBooking("REQUESTED", future);
     expect((await patch("accept")).status).toBe(404);
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it("refuses acceptance of a date the chef subsequently blocked", async () => {
+    mocks.session.mockResolvedValue({ user: { id: "chef1" } });
+    setBooking("REQUESTED", future);
+    mocks.prisma.chefBlockedDay.findUnique.mockResolvedValue({ id: "blocked1" });
+    const res = await patch("accept");
+    expect(res.status).toBe(409);
+    expect(mocks.prisma.booking.updateMany).not.toHaveBeenCalled();
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 

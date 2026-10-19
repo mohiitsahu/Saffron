@@ -13,14 +13,11 @@ import {
 } from "@/lib/availability";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-const addSchema = z.object({
-  from: z.string().trim(),
-  to: z.string().trim().optional(),
-});
+const addSchema = z.object({ from: z.string().trim(), to: z.string().trim().optional() });
 const removeSchema = z.object({ day: z.string().trim() });
 
-// The chef's upcoming days off, soonest first.
 async function upcomingDays(userId: string) {
   const rows = await prisma.chefBlockedDay.findMany({
     where: { userId, day: { gte: todayIST() } },
@@ -28,10 +25,10 @@ async function upcomingDays(userId: string) {
     take: MAX_BLOCKED_DAYS,
     select: { day: true },
   });
-  return rows.map((r) => r.day);
+  return rows.map((row) => row.day);
 }
 
-async function readBody(req: Request): Promise<unknown | null> {
+async function readBody(req: Request): Promise<unknown> {
   try {
     return await req.json();
   } catch {
@@ -45,7 +42,6 @@ export async function GET() {
   return NextResponse.json({ days: await upcomingDays(session.user.id) });
 }
 
-// Block one day or a range of days.
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
@@ -54,45 +50,56 @@ export async function POST(req: Request) {
   const parsed = addSchema.safeParse(await readBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Choose a date." }, { status: 400 });
 
-  const profile = await prisma.chefProfile.findUnique({ where: { userId }, select: { id: true } });
-  if (!profile) {
-    return NextResponse.json({ error: "Create your chef profile first." }, { status: 403 });
-  }
-
   const range = expandRange(parsed.data.from, parsed.data.to || undefined);
   if (!range.ok) return NextResponse.json({ error: range.error }, { status: 400 });
 
-  const existing = await upcomingDays(userId);
-  const fresh = range.days.filter((d) => !existing.includes(d));
-  if (existing.length + fresh.length > MAX_BLOCKED_DAYS) {
-    return NextResponse.json(
-      { error: `You can block at most ${MAX_BLOCKED_DAYS} upcoming days. Remove some first.` },
-      { status: 400 }
-    );
-  }
+  const result = await prisma.$transaction(async (tx) => {
+    // Shares the chef lock with booking creation; a block and a booking request
+    // can't both pass their availability checks at the same instant.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
 
-  if (fresh.length > 0) {
-    await prisma.chefBlockedDay.createMany({
-      data: fresh.map((day) => ({ userId, day })),
-      skipDuplicates: true,
+    const profile = await tx.chefProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!profile) return { ok: false as const, status: 403, error: "Create your chef profile first." };
+
+    const rows = await tx.chefBlockedDay.findMany({
+      where: { userId, day: { gte: todayIST() } },
+      select: { day: true },
+      take: MAX_BLOCKED_DAYS + 1,
     });
-  }
+    const existing = new Set(rows.map((row) => row.day));
+    const fresh = range.days.filter((day) => !existing.has(day));
+    if (existing.size + fresh.length > MAX_BLOCKED_DAYS) {
+      return {
+        ok: false as const,
+        status: 400,
+        error: `You can block at most ${MAX_BLOCKED_DAYS} upcoming days. Remove some first.`,
+      };
+    }
 
-  // Bookings the chef has already accepted are not cancelled. Tell the chef about any clash.
-  const first = range.days[0];
-  const last = range.days[range.days.length - 1];
-  const clashes = await prisma.booking.count({
-    where: {
-      chefId: userId,
-      status: "ACCEPTED",
-      eventDate: { gte: dayStartIST(first), lte: dayEndIST(last) },
-    },
-  });
+    if (fresh.length) {
+      await tx.chefBlockedDay.createMany({
+        data: fresh.map((day) => ({ userId, day })),
+        skipDuplicates: true,
+      });
+    }
+    // Blocking a day doesn't cancel previously accepted bookings. Warn the chef.
+    const clashes = await tx.booking.count({
+      where: {
+        chefId: userId,
+        status: "ACCEPTED",
+        eventDate: {
+          gte: dayStartIST(range.days[0]),
+          lte: dayEndIST(range.days[range.days.length - 1]),
+        },
+      },
+    });
+    return { ok: true as const, clashes };
+  }, { maxWait: 10_000, timeout: 15_000 });
 
-  return NextResponse.json({ days: await upcomingDays(userId), clashes });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ days: await upcomingDays(userId), clashes: result.clashes });
 }
 
-// Open one day again.
 export async function DELETE(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
@@ -102,7 +109,6 @@ export async function DELETE(req: Request) {
   if (!parsed.success || !isRealDay(parsed.data.day)) {
     return NextResponse.json({ error: "Choose a day to open." }, { status: 400 });
   }
-
   await prisma.chefBlockedDay.deleteMany({ where: { userId, day: parsed.data.day } });
   return NextResponse.json({ days: await upcomingDays(userId) });
 }

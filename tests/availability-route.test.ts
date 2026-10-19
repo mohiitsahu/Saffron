@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
     chefProfile: { findUnique: vi.fn() },
     chefBlockedDay: { findMany: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
     booking: { count: vi.fn() },
+    $executeRaw: vi.fn(),
+    $transaction: vi.fn(),
   },
 }));
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
@@ -34,6 +36,7 @@ beforeEach(() => {
   mocks.prisma.chefBlockedDay.createMany.mockResolvedValue({ count: 1 });
   mocks.prisma.chefBlockedDay.deleteMany.mockResolvedValue({ count: 1 });
   mocks.prisma.booking.count.mockResolvedValue(0);
+  mocks.prisma.$transaction.mockImplementation(async (callback) => callback(mocks.prisma));
 });
 
 describe("/api/chef/availability", () => {

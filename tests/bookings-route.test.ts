@@ -5,8 +5,10 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   prisma: {
     chefProfile: { findUnique: vi.fn() },
-    booking: { count: vi.fn(), findFirst: vi.fn() },
+    booking: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+    bookingEvent: { create: vi.fn() },
     chefBlockedDay: { findUnique: vi.fn() },
+    $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
   settle: vi.fn(),
@@ -80,18 +82,21 @@ beforeEach(() => {
   // First count = open requests, second = requests in the last hour.
   mocks.prisma.booking.count.mockResolvedValue(0);
   mocks.prisma.booking.findFirst.mockResolvedValue(null);
-  mocks.prisma.$transaction.mockImplementation(async (callback) =>
-    callback({
-      booking: { create: vi.fn().mockResolvedValue({ id: "new1" }) },
-      bookingEvent: { create: vi.fn() },
-    })
-  );
+  mocks.prisma.booking.create.mockResolvedValue({ id: "new1" });
+  mocks.prisma.$transaction.mockImplementation(async (callback) => callback(mocks.prisma));
 });
 
 describe("POST /api/bookings", () => {
   it("requires a signed-in user", async () => {
     mocks.session.mockResolvedValue(null);
     expect((await call()).status).toBe(401);
+  });
+
+  it("holds advisory locks during the quota and blocked-day checks", async () => {
+    await call();
+    expect(mocks.prisma.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(mocks.prisma.booking.count).toHaveBeenCalledTimes(2);
+    expect(mocks.prisma.chefBlockedDay.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it("creates a booking and works out the price on the server", async () => {

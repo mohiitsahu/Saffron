@@ -5,14 +5,31 @@ import { prisma } from "@/lib/prisma";
 import { MAX_PHOTO_BYTES, photoUrlFor, sniffImageType } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const UPLOAD_COOLDOWN_MS = 10_000;
+const MAX_FORM_BYTES = MAX_PHOTO_BYTES + 64 * 1024;
 
-// Upload (or replace) the signed-in person's photo. Expects multipart form data with a "file" field.
+// Upload or replace the signed-in user's chef photo. Expects form-data field "file".
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Sign in to upload a photo." }, { status: 401 });
+  }
+
+  // This fast rejection is defense in depth, not a substitute for an ingress upload limit.
+  const rawLength = req.headers.get("content-length");
+  if (rawLength !== null) {
+    const declaredLength = Number(rawLength);
+    if (!Number.isSafeInteger(declaredLength) || declaredLength < 0) {
+      return NextResponse.json({ error: "Invalid request size." }, { status: 400 });
+    }
+    if (declaredLength > MAX_FORM_BYTES) {
+      return NextResponse.json(
+        { error: "That photo is too large. Try a smaller one." },
+        { status: 413 }
+      );
+    }
   }
 
   let form: FormData;
@@ -30,7 +47,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "That file is empty." }, { status: 400 });
   }
   if (file.size > MAX_PHOTO_BYTES) {
-    return NextResponse.json({ error: "That photo is too large. Try a smaller one." }, { status: 413 });
+    return NextResponse.json(
+      { error: "That photo is too large. Try a smaller one." },
+      { status: 413 }
+    );
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
@@ -40,32 +60,38 @@ export async function POST(req: Request) {
   }
 
   const userId = session.user.id;
+  // Serialize photo changes per user. This prevents parallel uploads from bypassing
+  // the cooldown and keeps the photo URL synchronized with the current photo row.
+  const outcome = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
 
-  // A short pause between uploads, so the endpoint can't be hammered.
-  const previous = await prisma.chefPhoto.findUnique({ where: { userId }, select: { createdAt: true } });
-  if (previous && Date.now() - previous.createdAt.getTime() < UPLOAD_COOLDOWN_MS) {
-    return NextResponse.json({ error: "Please wait a few seconds before uploading again." }, { status: 429 });
-  }
+    const previous = await tx.chefPhoto.findUnique({
+      where: { userId },
+      select: { createdAt: true },
+    });
+    if (previous && Date.now() - previous.createdAt.getTime() < UPLOAD_COOLDOWN_MS) {
+      return { ok: false as const };
+    }
 
-  // One photo per person: the old one is replaced. The new row gets a new id,
-  // which changes the URL, so nobody sees a stale cached copy.
-  const photo = await prisma.$transaction(async (tx) => {
     await tx.chefPhoto.deleteMany({ where: { userId } });
-    return tx.chefPhoto.create({
+    const photo = await tx.chefPhoto.create({
       data: { userId, contentType, data: bytes },
       select: { id: true },
     });
+    const url = photoUrlFor(photo.id);
+    await tx.chefProfile.updateMany({ where: { userId }, data: { photoUrl: url } });
+    return { ok: true as const, url };
   });
 
-  const url = photoUrlFor(photo.id);
-
-  // If the chef profile already exists, the new photo goes live straight away.
-  await prisma.chefProfile.updateMany({ where: { userId }, data: { photoUrl: url } });
-
-  return NextResponse.json({ url });
+  if (!outcome.ok) {
+    return NextResponse.json(
+      { error: "Please wait a few seconds before uploading again." },
+      { status: 429 }
+    );
+  }
+  return NextResponse.json({ url: outcome.url });
 }
 
-// Remove the signed-in person's photo.
 export async function DELETE() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -73,10 +99,11 @@ export async function DELETE() {
   }
 
   const userId = session.user.id;
-  await prisma.$transaction([
-    prisma.chefPhoto.deleteMany({ where: { userId } }),
-    prisma.chefProfile.updateMany({ where: { userId }, data: { photoUrl: null } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+    await tx.chefPhoto.deleteMany({ where: { userId } });
+    await tx.chefProfile.updateMany({ where: { userId }, data: { photoUrl: null } });
+  });
 
   return NextResponse.json({ ok: true });
 }

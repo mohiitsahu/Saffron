@@ -4,11 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bookingSelect, resolveTransition, serializeBooking } from "@/lib/bookings";
 import { formatDateTimeIST } from "@/lib/format";
+import { istDayKey } from "@/lib/availability";
 import { bookingActionSchema } from "@/lib/validation";
 import { notifyBooking } from "@/lib/notify";
 import type { BookingEmailKind } from "@/lib/emailTemplates";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 // A chef needs at least this long between two accepted bookings.
 const ACCEPT_GAP_MS = 4 * 60 * 60 * 1000;
@@ -54,6 +56,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (parsed.data.action === "accept") {
       // One accept at a time per chef, so two accepts at the same moment can't both pass the check below.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.chefId}))`;
+
+      // The chef may have blocked this day after the customer sent the request.
+      // Share the same lock as day-blocking and booking creation.
+      const blocked = await tx.chefBlockedDay.findUnique({
+        where: { userId_day: { userId: booking.chefId, day: istDayKey(booking.eventDate) } },
+        select: { id: true },
+      });
+      if (blocked) {
+        return { ok: false, status: 409, error: "You marked this day unavailable. Open the day before accepting this booking." };
+      }
+      if (booking.eventDate.getTime() <= Date.now()) {
+        return { ok: false, status: 409, error: "This event time has passed. Refresh your bookings." };
+      }
 
       const clash = await tx.booking.findFirst({
         where: {
