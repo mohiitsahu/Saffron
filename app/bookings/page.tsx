@@ -15,7 +15,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: S
   }
 
   const { asCustomer, asChef } = await getBookingsFor(session.user.id);
-  const showChefTabs = session.user.role === "CHEF" || asChef.length > 0;
+  const showChefTabs = session.user.isChef || asChef.length > 0;
   const tabParam = Array.isArray(searchParams.tab) ? searchParams.tab[0] : searchParams.tab;
 
   return (

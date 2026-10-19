@@ -15,6 +15,10 @@ Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Prisma + PostgreSQ
   chef's phone number revealed only after the chef accepts
 - Requests that nobody answers expire on their own; accepted bookings close themselves
   3 days after the event
+- Chefs can block out days they're unavailable (one day or a range), and customers can't request
+  those days
+- Email notifications: a chef is emailed about a new request or a cancellation, and a customer
+  when a booking is accepted, declined, cancelled or completed
 - Admin page (`/admin`) to verify chefs, hide profiles and remove photos
 
 ## Getting started
@@ -47,6 +51,32 @@ Open <http://localhost:3000>.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
 | `NEXTAUTH_SECRET` | Random string that signs login cookies. Required in production |
 | `NEXTAUTH_URL` | The site's public address, for example `http://localhost:3000` |
+| `RESEND_API_KEY` | Optional. Key for sending email through [Resend](https://resend.com) |
+| `EMAIL_FROM` | Optional. Sender, for example `Saffron <hello@yourdomain.com>` |
+
+## Email notifications
+
+Emails are sent through Resend. They are optional: if `RESEND_API_KEY` is empty, Saffron works as
+normal and skips the emails (in development it prints a line in the terminal instead).
+
+| Event | Who gets the email |
+| --- | --- |
+| New booking request | The chef |
+| Customer cancels | The chef |
+| Chef accepts | The customer |
+| Chef declines | The customer |
+| Chef cancels | The customer |
+| Booking completed | The customer (asks for a review) |
+
+To receive real emails:
+
+1. Create a free Resend account and an API key, and put it in `RESEND_API_KEY`.
+2. While testing, leave `EMAIL_FROM` empty. Resend's test sender only delivers to the email
+   address of your own Resend account, so test by using that address for your accounts.
+3. For real users, verify your domain in Resend and set `EMAIL_FROM` to an address on it.
+
+Addresses and phone numbers are never put in an email. They stay inside My bookings, after the
+chef accepts. A failed or slow email never blocks a booking.
 
 ## Making yourself an admin
 
@@ -67,9 +97,23 @@ Sign out and back in. An **Admin** link appears in the navbar.
 | `npm run build` | Build for production |
 | `npm start` | Run the production build |
 | `npm run lint` | Check the code with ESLint |
+| `npm test` | Run the automated tests once |
+| `npm run test:watch` | Re-run tests whenever a file changes |
 | `npx prisma migrate dev` | Apply new migrations to your development database |
 | `npx prisma migrate deploy` | Apply migrations to a production database |
 | `npx prisma studio` | Browse the database in your browser |
+
+## Tests
+
+```bash
+npm test
+```
+
+Tests live in `tests/` and run with [Vitest](https://vitest.dev). They need no database or
+Google login: the database is replaced by a stand-in. They cover the booking status rules
+(who can accept, decline, cancel and complete, and when), which details are hidden from
+whom, expiry of old requests, date and phone validation, photo type checks, and the booking
+API's limits. Run them before every deploy.
 
 ## Project layout
 
@@ -79,6 +123,7 @@ app/            pages and API routes (App Router)
 components/     React components
 lib/            shared logic: booking rules, validation, auth, formatting
 prisma/         database schema and migrations
+tests/          automated tests
 public/         static files (logo)
 ```
 
@@ -90,6 +135,10 @@ public/         static files (logo)
   address or phone number before a booking is accepted.
 - **Photos** are shrunk in the browser (about 100 KB) and stored in the `ChefPhoto` table, then
   served from `/api/photos/[id]`. Only JPEG, PNG and WebP are accepted.
+- **Days off** are stored as plain Indian calendar days (`ChefBlockedDay`, like `2030-11-02`), so
+  there is no timezone maths. A booking is refused if its Indian calendar day is blocked.
+  Bookings a chef already accepted are never cancelled automatically.
+- **Emails** are built in `lib/emailTemplates.ts` and sent from `lib/email.ts`.
 - **Limits** on abuse: at most 5 waiting requests and 10 requests per hour per customer, and a
   10-second pause between photo uploads.
 

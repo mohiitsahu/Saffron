@@ -22,12 +22,15 @@ export const authOptions: NextAuthOptions = {
       if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { role: true },
+          select: { role: true, chefProfile: { select: { id: true } } },
         });
         // The account no longer exists (it was deleted): drop the login instead of
         // letting a ghost session fail later with confusing errors.
         if (!dbUser) return {};
         token.role = dbUser.role;
+        // Role is a single value, so an admin who also cooks has role ADMIN.
+        // Having a chef profile is what makes someone a chef.
+        token.isChef = dbUser.role === "CHEF" || dbUser.chefProfile !== null;
       }
       return token;
     },
@@ -42,6 +45,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "CUSTOMER" | "CHEF" | "ADMIN";
+        session.user.isChef = Boolean(token.isChef);
       }
       return session;
     },

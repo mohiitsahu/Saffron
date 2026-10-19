@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { bookingSelect, resolveTransition, serializeBooking } from "@/lib/bookings";
 import { formatDateTimeIST } from "@/lib/format";
 import { bookingActionSchema } from "@/lib/validation";
+import { notifyBooking } from "@/lib/notify";
+import type { BookingEmailKind } from "@/lib/emailTemplates";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +105,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!outcome.ok) {
     return NextResponse.json({ error: outcome.error }, { status: outcome.status });
   }
+
+  // Tell the other person what happened. This never fails the request.
+  const kinds: Record<string, BookingEmailKind> = {
+    accept: "accepted",
+    decline: "declined",
+    complete: "completed",
+    cancel: role === "customer" ? "cancelledByCustomer" : "cancelledByChef",
+  };
+  const mail = await prisma.booking.findUnique({
+    where: { id: booking.id },
+    select: {
+      eventDate: true,
+      guests: true,
+      area: true,
+      estimatedTotal: true,
+      customer: { select: { name: true, email: true } },
+      chef: { select: { name: true, email: true, chefProfile: { select: { displayName: true } } } },
+    },
+  });
+  if (mail) await notifyBooking(kinds[parsed.data.action], mail);
 
   const fresh = await prisma.booking.findUnique({ where: { id: booking.id }, select: bookingSelect });
   return NextResponse.json({ booking: fresh ? serializeBooking(fresh, userId) : null });

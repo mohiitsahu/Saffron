@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bookingSelect, getBookingsFor, serializeBooking, settleStaleBookings } from "@/lib/bookings";
 import { bookingCreateSchema, fieldErrors } from "@/lib/validation";
+import { istDayKey } from "@/lib/availability";
+import { notifyBooking } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
       active: true,
       maxGuests: true,
       pricePerPerson: true,
+      user: { select: { name: true, email: true } },
     },
   });
 
@@ -117,6 +120,16 @@ export async function POST(req: Request) {
   } else if (eventDate.getTime() - Date.now() > MAX_ADVANCE_MS) {
     problems.eventDate = "Choose a date within the next year.";
   }
+  // The chef may have marked this day as unavailable.
+  if (!problems.eventDate) {
+    const blockedDay = await prisma.chefBlockedDay.findUnique({
+      where: { userId_day: { userId: chef.userId, day: istDayKey(eventDate) } },
+      select: { id: true },
+    });
+    if (blockedDay) {
+      problems.eventDate = `${chef.displayName} isn't available on that day. Choose another day.`;
+    }
+  }
   if (Object.keys(problems).length > 0) {
     return NextResponse.json(
       { error: "Some details need fixing. Check the highlighted fields.", fieldErrors: problems },
@@ -151,6 +164,20 @@ export async function POST(req: Request) {
       });
 
       return created;
+    });
+
+    // Tell the chef. This never fails the request: if email is down, the booking still stands.
+    await notifyBooking("requested", {
+      eventDate,
+      guests,
+      area,
+      estimatedTotal,
+      customer: { name: session.user.name ?? null, email: session.user.email ?? null },
+      chef: {
+        name: chef.user.name,
+        email: chef.user.email,
+        chefProfile: { displayName: chef.displayName },
+      },
     });
 
     return NextResponse.json({ booking: serializeBooking(booking, userId) }, { status: 201 });

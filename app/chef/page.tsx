@@ -7,6 +7,8 @@ import { countPendingRequests } from "@/lib/notifications";
 import { formatINR, menuLines } from "@/lib/format";
 import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import ShareProfile from "@/components/ShareProfile";
+import AvailabilityManager from "@/components/AvailabilityManager";
+import { todayIST } from "@/lib/availability";
 import { outlineButton, primaryButton } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +41,13 @@ export default async function ChefIdCardPage() {
 
   if (!profile) redirect("/cook-with-us");
 
-  const [agg, completed, pending] = await Promise.all([
+  const [blocked, agg, completed, pending] = await Promise.all([
+    prisma.chefBlockedDay.findMany({
+      where: { userId, day: { gte: todayIST() } },
+      orderBy: { day: "asc" },
+      take: 200,
+      select: { day: true },
+    }),
     prisma.review.aggregate({
       where: { chefId: userId },
       _avg: { rating: true },
@@ -193,6 +201,8 @@ export default async function ChefIdCardPage() {
             </Link>
             <ShareProfile path={`/chefs/${profile.id}`} name={profile.displayName} />
           </div>
+
+          <AvailabilityManager initialDays={blocked.map((b) => b.day)} today={todayIST()} />
 
           <div className="rounded-2xl bg-sage p-5">
             <h2 className="font-bold">Make your profile stand out</h2>

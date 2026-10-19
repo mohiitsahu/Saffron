@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { countPendingRequests } from "@/lib/notifications";
 import NavMenu from "@/components/NavMenu";
 import NavShell from "@/components/NavShell";
@@ -10,14 +9,7 @@ export default async function Navbar() {
   const session = await getServerSession(authOptions);
   const user = session?.user;
 
-  // Role is a single value, so an admin who is also a chef has role ADMIN.
-  // Having a chef profile is what makes someone a chef here.
-  const hasChefProfile = user
-    ? Boolean(
-        await prisma.chefProfile.findUnique({ where: { userId: user.id }, select: { id: true } })
-      )
-    : false;
-  const isChef = user?.role === "CHEF" || hasChefProfile;
+  const isChef = Boolean(user?.isChef);
   const isAdmin = user?.role === "ADMIN";
   const pendingRequests = user && isChef ? await countPendingRequests(user.id) : 0;
 

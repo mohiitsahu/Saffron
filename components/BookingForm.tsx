@@ -12,12 +12,21 @@ type Props = {
   maxGuests: number;
   viewer: "guest" | "owner" | "customer";
   existingStatus: "REQUESTED" | "ACCEPTED" | null;
+  // Days the chef has marked unavailable, like "2030-11-02", soonest first.
+  unavailableDays: string[];
 };
 
 const ticketClass = "rounded-2xl border-2 border-dashed border-leaf bg-cream p-5 shadow-soft";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
+}
+
+// "2030-11-02" -> "2 Nov"
+function shortDay(day: string) {
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(
+    new Date(`${day}T00:00:00+05:30`)
+  );
 }
 
 function Field({
@@ -56,6 +65,7 @@ export default function BookingForm({
   maxGuests,
   viewer,
   existingStatus,
+  unavailableDays,
 }: Props) {
   const [eventDate, setEventDate] = useState("");
   const [guests, setGuests] = useState(String(Math.min(2, maxGuests)));
@@ -76,6 +86,11 @@ export default function BookingForm({
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
     );
   }, []);
+
+  // The date field gives "2030-11-02T19:30". The first 10 characters are the day.
+  const pickedUnavailable = eventDate.length >= 10 && unavailableDays.includes(eventDate.slice(0, 10));
+  const shownDays = unavailableDays.slice(0, 6).map(shortDay).join(", ");
+  const moreDays = unavailableDays.length - 6;
 
   const guestsNumber = Number(guests);
   const guestsValid = Number.isInteger(guestsNumber) && guestsNumber >= 1 && guestsNumber <= maxGuests;
@@ -190,7 +205,12 @@ export default function BookingForm({
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-4 space-y-4">
-        <Field label="Date and time" htmlFor="b-date" error={errors.eventDate} hint="At least 24 hours from now.">
+        <Field
+          label="Date and time"
+          htmlFor="b-date"
+          error={errors.eventDate ?? (pickedUnavailable ? `${chefName} isn't available on that day.` : undefined)}
+          hint="At least 24 hours from now."
+        >
           <input
             id="b-date"
             type="datetime-local"
@@ -199,6 +219,12 @@ export default function BookingForm({
             onChange={(e) => setEventDate(e.target.value)}
             className={inputClass}
           />
+          {unavailableDays.length > 0 && (
+            <p className="mt-1 text-xs text-ink/70">
+              Not available: {shownDays}
+              {moreDays > 0 ? ` and ${moreDays} more` : ""}.
+            </p>
+          )}
         </Field>
 
         <Field

@@ -23,6 +23,7 @@ enum BookingStatus {
   CANCELLED
   COMPLETED
   EXPIRED
+  REPORTED // already exists in the live database; kept so the schema matches it
 }
 
 model User {
@@ -40,6 +41,7 @@ model User {
 
   chefProfile      ChefProfile?
   chefPhoto        ChefPhoto?
+  blockedDays      ChefBlockedDay[]
   customerBookings Booking[] @relation("CustomerBookings")
   chefBookings     Booking[] @relation("ChefBookings")
   reviewsWritten   Review[]  @relation("ReviewCustomer")
@@ -113,6 +115,18 @@ model ChefPhoto {
   createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A whole day (in India) when a chef can't take bookings. Customers can't request that day.
+model ChefBlockedDay {
+  id        String   @id @default(cuid())
+  userId    String
+  day       String   // calendar day in IST, like "2030-11-02"
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
 }
 
 model Booking {

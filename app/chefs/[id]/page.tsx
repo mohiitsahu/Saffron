@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { settleStaleBookings } from "@/lib/bookings";
+import { todayIST } from "@/lib/availability";
 import { firstName, formatDateIST, formatINR, menuLines } from "@/lib/format";
 import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import BookingForm from "@/components/BookingForm";
@@ -41,7 +43,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
 
   if (!chef || !chef.active) notFound();
 
-  const [session, agg, reviews, completed] = await Promise.all([
+  const [session, agg, reviews, completed, blocked] = await Promise.all([
     getServerSession(authOptions),
     prisma.review.aggregate({
       where: { chefId: chef.userId },
@@ -61,12 +63,20 @@ export default async function ChefProfilePage({ params }: { params: { id: string
       },
     }),
     prisma.booking.count({ where: { chefId: chef.userId, status: "COMPLETED" } }),
+    prisma.chefBlockedDay.findMany({
+      where: { userId: chef.userId, day: { gte: todayIST() } },
+      orderBy: { day: "asc" },
+      take: 200,
+      select: { day: true },
+    }),
   ]);
 
   const viewer = !session?.user ? "guest" : session.user.id === chef.userId ? "owner" : "customer";
 
   // A pending or accepted request blocks sending another one to the same chef.
   const customerId = viewer === "customer" ? session?.user.id : undefined;
+  // Expire old unanswered requests first, so they don't hide the booking form.
+  if (customerId) await settleStaleBookings({ customerId, chefId: chef.userId });
   const existing = customerId
     ? await prisma.booking.findFirst({
         where: {
@@ -255,6 +265,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
             maxGuests={chef.maxGuests}
             viewer={viewer}
             existingStatus={existingStatus}
+            unavailableDays={blocked.map((b) => b.day)}
           />
 
           <div className="rounded-2xl bg-sage p-5 shadow-soft">

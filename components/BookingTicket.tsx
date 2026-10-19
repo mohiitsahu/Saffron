@@ -15,6 +15,7 @@ const STATUS: Record<BookingView["status"], { label: string; className: string }
   DECLINED: { label: "Declined", className: "border border-danger text-danger" },
   CANCELLED: { label: "Cancelled", className: "border border-danger text-danger" },
   EXPIRED: { label: "Expired", className: "border border-ink/40 text-ink/70" },
+  REPORTED: { label: "Reported", className: "border border-danger text-danger" },
 };
 
 export default function BookingTicket({
