@@ -6,7 +6,10 @@ export type BookingEmailKind =
   | "declined" // to the customer
   | "cancelledByCustomer" // to the chef
   | "cancelledByChef" // to the customer
-  | "completed"; // to the customer: invite a review
+  | "completed" // to the customer: invite a review
+  | "rescheduled"
+  | "proposalAccepted";
+  // Time proposals keep contact details private until the customer accepts.
 
 export type BookingEmailData = {
   kind: BookingEmailKind;
@@ -34,6 +37,14 @@ type Copy = { subject: string; heading: string; body: string; button: string; pa
 function copyFor(d: BookingEmailData): Copy {
   const when = formatDateTimeIST(d.eventDate);
   switch (d.kind) {
+    case "rescheduled":
+      return { subject: `${d.chefName} suggested a new time`, heading: "A new time for your meal",
+        body: `${d.chefName} suggested the time below. Accept it in My bookings to confirm, or decline to close the request. Contact details stay private until you agree.`,
+        button: "Review the new time", path: "/bookings?tab=mine", showArea: true };
+    case "proposalAccepted":
+      return { subject: `${d.customerName} accepted your suggested time`, heading: "Your suggested time is confirmed",
+        body: `${d.customerName} agreed to the new time below. Contact details are now in My bookings.`,
+        button: "See the booking", path: "/bookings", showArea: true };
     case "requested":
       return {
         subject: `New booking request for ${when}`,

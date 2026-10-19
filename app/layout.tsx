@@ -65,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     My bookings
                   </Link>
                 </li>
+                <li><Link href="/cancellation" className={footerLink}>Cancellation and changes</Link></li>
               </ul>
             </nav>
 

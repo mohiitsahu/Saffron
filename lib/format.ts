@@ -21,6 +21,18 @@ export function formatDateTimeIST(date: Date | string) {
   }).format(new Date(date));
 }
 
+// datetime-local has no timezone. Booking forms send these values as IST,
+// regardless of where the customer's browser is located.
+export function bookingDateLimits(now = Date.now()) {
+  const minute = 60_000;
+  const day = 24 * 60 * minute;
+  const input = (timestamp: number) => new Date(timestamp + 5.5 * 60 * minute).toISOString().slice(0, 16);
+  return {
+    min: input(Math.ceil((now + day) / minute) * minute),
+    max: input(Math.floor((now + 365 * day) / minute) * minute),
+  };
+}
+
 export function menuLines(menu: string) {
   return menu
     .split("\n")

@@ -72,12 +72,13 @@ export async function POST(req: Request) {
       displayName: true,
       city: true,
       active: true,
+      suspended: true,
       maxGuests: true,
       pricePerPerson: true,
       user: { select: { name: true, email: true } },
     },
   });
-  if (!chef || !chef.active) {
+  if (!chef || !chef.active || chef.suspended) {
     return NextResponse.json({ error: "This chef isn't taking requests right now." }, { status: 404 });
   }
   if (chef.userId === customerId) {
@@ -113,9 +114,9 @@ export async function POST(req: Request) {
       // Re-check chef activity and capacity after obtaining the chef lock.
       const currentChef = await tx.chefProfile.findUnique({
         where: { id: chefProfileId },
-        select: { active: true, maxGuests: true, pricePerPerson: true, city: true },
+        select: { active: true, suspended: true, maxGuests: true, pricePerPerson: true, city: true },
       });
-      if (!currentChef?.active) {
+      if (!currentChef?.active || currentChef.suspended) {
         return refused(404, "This chef isn't taking requests right now.");
       }
       if (guests > currentChef.maxGuests) {
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
         });
       }
 
-      const [openRequests, recentRequests, existing, blockedDay] = await Promise.all([
+      const [openRequests, recentRequests, existing, blockedDay, clash] = await Promise.all([
         tx.booking.count({ where: { customerId, status: "REQUESTED" } }),
         tx.booking.count({
           where: { customerId, createdAt: { gt: new Date(now - 60 * 60 * 1000) } },
@@ -143,6 +144,9 @@ export async function POST(req: Request) {
           where: { userId_day: { userId: chef.userId, day: istDayKey(eventDate) } },
           select: { id: true },
         }),
+        tx.booking.findFirst({ where: { chefId: chef.userId, status: "ACCEPTED", eventDate: {
+          gt: new Date(eventDate.getTime() - 14_400_000), lt: new Date(eventDate.getTime() + 14_400_000),
+        } }, select: { id: true } }),
       ]);
 
       if (openRequests >= MAX_OPEN_REQUESTS) {
@@ -159,7 +163,7 @@ export async function POST(req: Request) {
             : "You already have an accepted booking with this chef. See it under My bookings."
         );
       }
-      if (blockedDay) {
+      if (blockedDay || clash) {
         return refused(400, "Some details need fixing. Check the highlighted fields.", {
           eventDate: `${chef.displayName} isn't available on that day. Choose another day.`,
         });

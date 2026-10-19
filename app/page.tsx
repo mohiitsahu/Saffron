@@ -42,7 +42,7 @@ const steps = [
 export default async function Home() {
   const [chefs, chefCities] = await Promise.all([
     prisma.chefProfile.findMany({
-      where: { active: true },
+      where: { active: true, suspended: false },
       orderBy: [{ verified: "desc" }, { createdAt: "desc" }],
       take: FEATURED,
       select: chefCardSelect,

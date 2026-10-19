@@ -15,6 +15,9 @@ type State = {
   maxPrice: string;
   verified: boolean;
   cuisine: string; // comma separated, lowercase
+  date: string;
+  time: string;
+  guests: string;
 };
 
 const SORT_LABELS: Record<string, string> = {
@@ -33,6 +36,9 @@ function toUrl(s: State) {
   if (s.maxPrice) params.set("maxPrice", s.maxPrice);
   if (s.verified) params.set("verified", "1");
   if (s.cuisine) params.set("cuisine", s.cuisine);
+  if (s.date) params.set("date", s.date);
+  if (s.time) params.set("time", s.time);
+  if (s.guests) params.set("guests", s.guests);
   const qs = params.toString();
   return qs ? `/chefs?${qs}` : "/chefs";
 }
@@ -108,6 +114,18 @@ export default function ChefsHeader({
         onSubmit={(q, city) => push({ q, city })}
         pending={isPending}
       />
+
+      <form className="mt-5 grid gap-3 rounded-xl border border-leaf/25 bg-sage/40 p-4 sm:grid-cols-[1fr_1fr_6rem_auto] sm:items-end"
+        onSubmit={(e) => {
+          e.preventDefault(); const data = new FormData(e.currentTarget);
+          push({ date: String(data.get("date") ?? ""), time: String(data.get("time") ?? ""), guests: String(data.get("guests") ?? "") });
+        }}>
+        <div><label htmlFor="search-date" className={labelClass}>Meal date</label><input id="search-date" name="date" type="date" defaultValue={initial.date} className={`${inputClass} min-w-0`} /></div>
+        <div><label htmlFor="search-time" className={labelClass}>Time (IST, optional)</label><input id="search-time" name="time" type="time" defaultValue={initial.time} className={`${inputClass} min-w-0`} /></div>
+        <div><label htmlFor="search-guests" className={labelClass}>Guests</label><input id="search-guests" name="guests" type="number" min="1" max="100" defaultValue={initial.guests} className={inputClass} /></div>
+        <button className={outlineButton}>Check availability</button>
+        {(initial.date || initial.time || initial.guests) && <button type="button" onClick={() => push({ date: "", time: "", guests: "" })} className="min-h-11 text-sm text-leaf underline">Clear date and guests</button>}
+      </form>
 
       <div className="mt-10">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-leaf">

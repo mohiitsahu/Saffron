@@ -21,18 +21,20 @@ export default function ChefListCard({
   avg,
   count,
   completed = 0,
+  bookingQuery = "",
 }: {
   chef: ChefListData;
   avg: number | null;
   count: number;
   completed?: number;
+  bookingQuery?: string;
 }) {
   const dishes = menuLines(chef.sampleMenu).slice(0, 3);
   const tags = dishes.length > 0 ? dishes : chef.cuisines.slice(1, 4);
 
   return (
     <Link
-      href={`/chefs/${chef.id}`}
+      href={`/chefs/${chef.id}${bookingQuery ? `?${bookingQuery}` : ""}`}
       className="group flex flex-col overflow-hidden rounded-2xl border border-leaf/25 bg-cream shadow-soft transition duration-300 hover:border-leaf/60 hover:shadow-lift md:flex-row motion-safe:hover:-translate-y-0.5"
     >
       <div className="relative h-52 w-full flex-none overflow-hidden md:h-auto md:min-h-[14rem] md:w-1/3">

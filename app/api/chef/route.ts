@@ -67,15 +67,19 @@ async function save(req: Request) {
 
   // One transaction: save the profile, store the phone, and upgrade
   // CUSTOMER to CHEF. ADMIN and existing CHEF roles are left alone.
-  const [profile] = await prisma.$transaction([
-    prisma.chefProfile.upsert({
+  const profile = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+    const existing = await tx.chefProfile.findUnique({ where: { userId }, select: { suspended: true } });
+    const safeData = existing?.suspended ? { ...data, active: false } : data;
+    const saved = await tx.chefProfile.upsert({
       where: { userId },
-      create: { userId, ...data },
-      update: data,
-    }),
-    prisma.user.update({ where: { id: userId }, data: { phone } }),
-    prisma.user.updateMany({ where: { id: userId, role: "CUSTOMER" }, data: { role: "CHEF" } }),
-  ]);
+      create: { userId, ...safeData },
+      update: safeData,
+    });
+    await tx.user.update({ where: { id: userId }, data: { phone } });
+    await tx.user.updateMany({ where: { id: userId, role: "CUSTOMER" }, data: { role: "CHEF" } });
+    return saved;
+  });
 
   return NextResponse.json({ profile });
 }

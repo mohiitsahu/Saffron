@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { BookingView } from "@/lib/bookings";
 import BookingTicket from "@/components/BookingTicket";
-import { primaryButton } from "@/lib/ui";
+import BookingFeedback from "@/components/BookingFeedback";
+import { outlineButton, primaryButton } from "@/lib/ui";
 
 type Tab = "requests" | "mine";
 type Perspective = "chef" | "customer";
@@ -43,6 +45,11 @@ function Group({ title, hint, items }: { title: string; hint?: string; items: Bo
 
 function History({ items, startOpen }: { items: BookingView[]; startOpen: boolean }) {
   const [show, setShow] = useState(startOpen);
+  const [limit, setLimit] = useState(6);
+  // After the last active booking is cancelled or completed, show where it went.
+  useEffect(() => {
+    if (startOpen) setShow(true);
+  }, [startOpen]);
   if (items.length === 0) return null;
 
   return (
@@ -59,50 +66,62 @@ function History({ items, startOpen }: { items: BookingView[]; startOpen: boolea
           {show ? "▲" : "▼"}
         </span>
       </button>
-      <p className="text-sm text-ink/70">Completed and cancelled bookings. Tap one to see the details.</p>
+      <p className="text-sm text-ink/70">Past bookings, newest first. Open a ticket to see the details.</p>
       {show && (
         <div className="mt-4 grid gap-3 xl:grid-cols-2 xl:items-start">
-          {items.map((booking) => (
+          {items.slice(0, limit).map((booking) => (
             <BookingTicket key={booking.id} booking={booking} collapsible defaultOpen={false} />
           ))}
         </div>
       )}
+      {show && items.length > limit && <button type="button" onClick={() => setLimit((value) => value + 6)} className={`${outlineButton} mt-4`}>Show more history ({items.length - limit} remaining)</button>}
     </section>
   );
 }
 
 function BookingList({ items, perspective }: { items: BookingView[]; perspective: Perspective }) {
-  const needs = items.filter((b) => b.status === "REQUESTED");
-  const confirmed = items.filter((b) => b.status === "ACCEPTED");
-  const toReview =
-    perspective === "customer"
-      ? items.filter((b) => b.status === "COMPLETED" && b.reviewRating === null)
-      : [];
-  const history = items.filter(
-    (b) => b.status !== "REQUESTED" && b.status !== "ACCEPTED" && !toReview.includes(b)
-  );
-  const hasActive = needs.length + confirmed.length + toReview.length > 0;
+  const [filter, setFilter] = useState("all");
+  const upcoming = [...items].sort((a, b) => Date.parse(a.eventDate) - Date.parse(b.eventDate));
+  const needs = upcoming.filter((b) => b.status === "REQUESTED" && !b.proposedEventDate);
+  const proposals = upcoming.filter((b) => b.status === "REQUESTED" && b.proposedEventDate);
+  const toComplete = upcoming.filter((b) => perspective === "chef" && b.status === "ACCEPTED" && b.eventPassed);
+  const confirmed = upcoming.filter((b) => b.status === "ACCEPTED" && !toComplete.includes(b));
+  const toReview = perspective === "customer" ? items.filter((b) => b.status === "COMPLETED" && b.reviewRating === null) : [];
+  const history = items.filter((b) => !isOpen(b) && !toReview.includes(b))
+    .sort((a, b) => Date.parse(b.eventDate) - Date.parse(a.eventDate));
+  const hasActive = needs.length + proposals.length + confirmed.length + toReview.length + toComplete.length > 0;
+  const actionCount = (perspective === "chef" ? needs.length : proposals.length) + toReview.length + toComplete.length;
+  const filters = [
+    { id: "all", label: "All bookings", count: items.length },
+    { id: "action", label: "Needs your action", count: actionCount },
+    { id: "confirmed", label: "Confirmed", count: confirmed.length + toComplete.length },
+    { id: "history", label: "History", count: history.length },
+  ];
+  const showNeeds = filter === "all" || (filter === "action" && perspective === "chef");
+  const showProposals = filter === "all" || (filter === "action" && perspective === "customer");
+  const hasResults = filter === "all" || filters.find((item) => item.id === filter)!.count > 0;
 
-  return (
-    <div>
-      <Group
-        title={perspective === "chef" ? "Needs your answer" : "Waiting for the chef"}
-        hint={
-          perspective === "chef"
-            ? "Accept to share your phone number and get the customer's address, or decline if you can't take it."
-            : "The chef will accept or decline soon. You can cancel the request until then."
-        }
-        items={needs}
-      />
-      <Group title="Confirmed" items={confirmed} />
-      <Group
-        title="Waiting for your review"
-        hint="Tell others how your meal went."
-        items={toReview}
-      />
-      <History items={history} startOpen={!hasActive} />
+  return <div>
+    <div role="group" aria-label="Filter bookings" className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {filters.map((item) => <button key={item.id} type="button" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}
+        className={`rounded-2xl border p-4 text-left transition-colors ${filter === item.id ? "border-leaf bg-forest text-cream shadow-soft" : "border-leaf/20 bg-white/60 hover:border-leaf/60"}`}>
+        <span className="block text-2xl font-bold">{item.count}</span>
+        <span className={`mt-1 block text-sm ${filter === item.id ? "text-cream/80" : "text-ink/70"}`}>{item.label}</span>
+      </button>)}
     </div>
-  );
+    {!hasResults && <div className="rounded-2xl border border-leaf/20 bg-sage/40 p-6">
+      <h2 className="text-lg font-bold">{filter === "action" ? "You’re all caught up" : filter === "confirmed" ? "No confirmed bookings yet" : "No past bookings yet"}</h2>
+      <p className="mt-1 text-sm text-ink/70">{filter === "action" ? "There’s nothing you need to respond to right now." : "Choose All bookings to see your other requests."}</p>
+    </div>}
+    {showProposals && perspective === "customer" && <Group title="New time to review" hint="Accept the chef’s suggested time to confirm, or decline to close the request." items={proposals} />}
+    {showNeeds && <Group title={perspective === "chef" ? "Needs your answer" : "Waiting for the chef"}
+      hint={perspective === "chef" ? "Accept to share contact details, suggest a different time, or decline if you can’t take it." : "The chef will accept or decline soon. You can cancel the request until then."} items={needs} />}
+    {(filter === "all" || filter === "action" || filter === "confirmed") && <Group title="Ready to complete" hint="The event time has passed. Mark the meal completed so the customer can leave a review." items={toComplete} />}
+    {(filter === "all" || filter === "action") && <Group title="Waiting for your review" hint="Tell others how your meal went." items={toReview} />}
+    {(filter === "all" || filter === "confirmed") && <Group title="Confirmed" hint="Ordered by event date, soonest first." items={confirmed} />}
+    {showProposals && perspective === "chef" && <Group title="Waiting for the customer" hint="The customer must agree to your suggested time before it is confirmed." items={proposals} />}
+    {(filter === "all" || filter === "history") && <History items={history} startOpen={filter === "history" || !hasActive} />}
+  </div>;
 }
 
 export default function BookingsView({
@@ -118,7 +137,10 @@ export default function BookingsView({
 }) {
   const [tab, setTab] = useState<Tab>(showChefTabs ? initialTab : "mine");
 
-  const waiting = asChef.filter((b) => b.status === "REQUESTED" && !b.eventPassed).length;
+  const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+
+  const waiting = asChef.filter((b) => b.status === "REQUESTED" && !b.eventPassed && !b.proposedEventDate).length;
   const mineOpen = asCustomer.filter(isOpen).length;
 
   const tabClass = (active: boolean) =>
@@ -127,7 +149,12 @@ export default function BookingsView({
     }`;
 
   return (
+    <BookingFeedback>
     <div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-ink/70">{refreshing ? "Updating your bookings…" : "Check replies, manage your meals, and review past bookings."}</p>
+        <button type="button" disabled={refreshing} onClick={() => startRefresh(() => router.refresh())} className={outlineButton}>{refreshing ? "Refreshing…" : "Refresh bookings"}</button>
+      </div>
       {showChefTabs && (
         <div role="group" aria-label="Choose which bookings to show" className="flex flex-wrap gap-2 border-b border-leaf/20">
           <button
@@ -163,7 +190,7 @@ export default function BookingsView({
               <p className="mt-1 text-ink/80">They will appear here when customers book you.</p>
             </div>
           ) : (
-            <BookingList items={asChef} perspective="chef" />
+            <BookingList key="chef" items={asChef} perspective="chef" />
           )
         ) : asCustomer.length === 0 ? (
           <div className="max-w-3xl animate-scale-in rounded-2xl border-2 border-dashed border-leaf/60 bg-sage/70 p-6 shadow-soft">
@@ -174,9 +201,10 @@ export default function BookingsView({
             </Link>
           </div>
         ) : (
-          <BookingList items={asCustomer} perspective="customer" />
+          <BookingList key="customer" items={asCustomer} perspective="customer" />
         )}
       </div>
     </div>
+    </BookingFeedback>
   );
 }

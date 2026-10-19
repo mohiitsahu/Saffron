@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { countPendingRequests } from "@/lib/notifications";
 import NavMenu from "@/components/NavMenu";
 import NavShell from "@/components/NavShell";
 
@@ -11,15 +10,14 @@ export default async function Navbar() {
 
   const isChef = Boolean(user?.isChef);
   const isAdmin = user?.role === "ADMIN";
-  const pendingRequests = user && isChef ? await countPendingRequests(user.id) : 0;
 
-  const links: { href: string; label: string; alert?: boolean }[] = [
+  const links: { href: string; label: string }[] = [
     { href: "/chefs", label: "Find a chef" },
     isChef
       ? { href: "/chef", label: "Chef profile" }
       : { href: "/cook-with-us", label: "Cook with us" },
   ];
-  if (user) links.push({ href: "/bookings", label: "My bookings", alert: true });
+  if (user) links.push({ href: "/bookings", label: "My bookings" });
   if (isAdmin) links.push({ href: "/admin", label: "Admin" });
 
   return (
@@ -42,8 +40,6 @@ export default async function Navbar() {
         links={links}
         signedIn={Boolean(user)}
         name={user?.name ?? user?.email ?? ""}
-        isChef={isChef}
-        pendingRequests={pendingRequests}
       />
     </NavShell>
   );

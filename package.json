@@ -9,6 +9,9 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "test": "vitest run",
+    "test:integration": "node scripts/test-integration.mjs",
+    "test:browser": "node scripts/test-integration.mjs --browser",
+    "test:build": "node scripts/test-integration.mjs --browser --build",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -10,6 +10,8 @@ import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import BookingForm from "@/components/BookingForm";
 import Reveal from "@/components/Reveal";
 import { primaryButton } from "@/lib/ui";
+import { bookingCreateSchema } from "@/lib/validation";
+import ReportForm from "@/components/ReportForm";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,7 @@ const expect = [
   "The chef cooks in your kitchen. You pay them directly by UPI or cash.",
 ];
 
-export default async function ChefProfilePage({ params }: { params: { id: string } }) {
+export default async function ChefProfilePage({ params, searchParams }: { params: { id: string }; searchParams: { eventDate?: string; guests?: string } }) {
   // Phone is deliberately not selected: it is only revealed after a booking is accepted.
   const chef = await prisma.chefProfile.findUnique({
     where: { id: params.id },
@@ -38,10 +40,13 @@ export default async function ChefProfilePage({ params }: { params: { id: string
       sampleMenu: true,
       verified: true,
       active: true,
+      suspended: true,
     },
   });
 
-  if (!chef || !chef.active) notFound();
+  if (!chef || !chef.active || chef.suspended) notFound();
+  const selectedDate = bookingCreateSchema.shape.eventDate.safeParse(searchParams.eventDate);
+  const selectedGuests = Number(searchParams.guests);
 
   const [session, agg, reviews, completed, blocked] = await Promise.all([
     getServerSession(authOptions),
@@ -184,7 +189,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-ink/60">Completed</dt>
-              <dd className="mt-0.5 font-bold">{completed} bookings</dd>
+              <dd className="mt-0.5 font-bold">{completed} {completed === 1 ? "booking" : "bookings"}</dd>
             </div>
           </dl>
 
@@ -257,8 +262,10 @@ export default async function ChefProfilePage({ params }: { params: { id: string
           </Reveal>
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
+        <aside className="min-w-0 space-y-4">
           <BookingForm
+            initialEventDate={selectedDate.success ? searchParams.eventDate : ""}
+            initialGuests={Number.isInteger(selectedGuests) && selectedGuests >= 1 && selectedGuests <= chef.maxGuests ? selectedGuests : undefined}
             chefProfileId={chef.id}
             chefName={chef.displayName}
             pricePerPerson={chef.pricePerPerson}
@@ -267,6 +274,7 @@ export default async function ChefProfilePage({ params }: { params: { id: string
             existingStatus={existingStatus}
             unavailableDays={blocked.map((b) => b.day)}
           />
+          {session?.user && viewer !== "owner" && <ReportForm targetType="chef" targetId={chef.id} />}
 
           <div className="rounded-2xl bg-sage p-5 shadow-soft">
             <h2 className="font-bold">Booking safely</h2>

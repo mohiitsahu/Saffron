@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { formatINR } from "@/lib/format";
+import { useEffect, useRef, useState } from "react";
+import { bookingDateLimits, formatINR } from "@/lib/format";
 import { inputClass, labelClass, outlineButton, primaryButton } from "@/lib/ui";
+import CancellationNote from "@/components/CancellationNote";
 
 type Props = {
   chefProfileId: string;
@@ -14,13 +15,11 @@ type Props = {
   existingStatus: "REQUESTED" | "ACCEPTED" | null;
   // Days the chef has marked unavailable, like "2030-11-02", soonest first.
   unavailableDays: string[];
+  initialEventDate?: string;
+  initialGuests?: number;
 };
 
-const ticketClass = "rounded-2xl border-2 border-dashed border-leaf bg-cream p-5 shadow-soft";
-
-function pad(n: number) {
-  return String(n).padStart(2, "0");
-}
+const ticketClass = "rounded-2xl border border-leaf/30 bg-cream p-5 shadow-soft sm:p-6";
 
 // "2030-11-02" -> "2 Nov"
 function shortDay(day: string) {
@@ -48,9 +47,9 @@ function Field({
         {label}
       </label>
       {children}
-      {hint && !error && <p className="mt-1 text-xs text-ink/70">{hint}</p>}
+      {hint && !error && <p id={`${htmlFor}-help`} className="mt-1 text-xs text-ink/70">{hint}</p>}
       {error && (
-        <p className="mt-1 animate-fade-in text-sm font-medium text-danger" role="alert">
+        <p id={`${htmlFor}-help`} className="mt-1 animate-fade-in text-sm font-medium text-danger" role="alert">
           {error}
         </p>
       )}
@@ -66,14 +65,18 @@ export default function BookingForm({
   viewer,
   existingStatus,
   unavailableDays,
+  initialEventDate = "",
+  initialGuests,
 }: Props) {
-  const [eventDate, setEventDate] = useState("");
-  const [guests, setGuests] = useState(String(Math.min(2, maxGuests)));
+  const [eventDate, setEventDate] = useState(initialEventDate);
+  const [guests, setGuests] = useState(String(initialGuests ?? Math.min(2, maxGuests)));
   const [area, setArea] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [minDate, setMinDate] = useState("");
+  const [maxDate, setMaxDate] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -81,11 +84,21 @@ export default function BookingForm({
 
   // Earliest allowed time is 24 hours from now. Set after mount to avoid a server/browser mismatch.
   useEffect(() => {
-    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    setMinDate(
-      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-    );
+    const update = () => {
+      const limits = bookingDateLimits();
+      setMinDate(limits.min);
+      setMaxDate(limits.max);
+    };
+    update();
+    const timer = setInterval(update, 60_000);
+    return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (Object.keys(errors).length) {
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    }
+  }, [errors]);
 
   // The date field gives "2030-11-02T19:30". The first 10 characters are the day.
   const pickedUnavailable = eventDate.length >= 10 && unavailableDays.includes(eventDate.slice(0, 10));
@@ -201,20 +214,28 @@ export default function BookingForm({
         Request {chefName}
       </h2>
       <p className="mt-1 text-sm text-ink/80">
-        Cooks for up to {maxGuests} guests. Times are in IST. You won&apos;t be charged now.
+        A meal in your kitchen, for up to {maxGuests} guests.
       </p>
 
-      <form onSubmit={onSubmit} noValidate className="mt-4 space-y-4">
+      <form ref={formRef} onSubmit={onSubmit} noValidate className="mt-6 space-y-6">
+        <fieldset className="min-w-0 space-y-4">
+          <legend className="flex items-center gap-2.5 font-heading text-base font-bold">
+            <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-leaf text-xs text-white">1</span>
+            Your event
+          </legend>
         <Field
           label="Date and time"
           htmlFor="b-date"
           error={errors.eventDate ?? (pickedUnavailable ? `${chefName} isn't available on that day.` : undefined)}
-          hint="At least 24 hours from now."
+          hint="Times are in IST. Book at least 24 hours ahead."
         >
           <input
             id="b-date"
             type="datetime-local"
             min={minDate || undefined}
+            max={maxDate || undefined}
+            aria-invalid={Boolean(errors.eventDate || pickedUnavailable)}
+            aria-describedby="b-date-help"
             value={eventDate}
             onChange={(e) => setEventDate(e.target.value)}
             className={inputClass}
@@ -227,8 +248,9 @@ export default function BookingForm({
           )}
         </Field>
 
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
         <Field
-          label="Number of guests"
+          label="Guests"
           htmlFor="b-guests"
           error={errors.guests}
           hint={`Choose 1 to ${maxGuests}.`}
@@ -239,26 +261,55 @@ export default function BookingForm({
             inputMode="numeric"
             min={1}
             max={maxGuests}
+            aria-invalid={Boolean(errors.guests)}
+            aria-describedby="b-guests-help"
             value={guests}
             onChange={(e) => setGuests(e.target.value)}
             className={inputClass}
           />
         </Field>
 
-        <Field label="Area" htmlFor="b-area" error={errors.area} hint="Neighbourhood, for example: Arera Colony">
-          <input id="b-area" value={area} onChange={(e) => setArea(e.target.value)} className={inputClass} />
+        <Field label="Area" htmlFor="b-area" error={errors.area} hint="Your neighbourhood">
+          <input id="b-area" placeholder="e.g. Arera Colony" aria-invalid={Boolean(errors.area)} aria-describedby="b-area-help" value={area} onChange={(e) => setArea(e.target.value)} className={inputClass} />
         </Field>
+        </div>
+
+        <Field label="Food notes or allergies (optional)" htmlFor="b-notes" error={errors.notes}>
+          <textarea
+            id="b-notes"
+            aria-invalid={Boolean(errors.notes)}
+            aria-describedby={errors.notes ? "b-notes-help" : undefined}
+            rows={2}
+            placeholder="Dietary preferences, allergies or a dish you love"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        </fieldset>
+
+        <fieldset className="min-w-0 space-y-4 border-t border-leaf/20">
+          <legend className="flex items-center gap-2.5 pr-3 font-heading text-base font-bold">
+            <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-leaf text-xs text-white">2</span>
+            Contact details
+          </legend>
+          <p className="rounded-lg bg-sage/50 px-3 py-2 text-xs leading-relaxed text-ink/75">
+            Your phone and full address stay private until the chef accepts.
+          </p>
 
         <Field
           label="Your phone number"
           htmlFor="b-phone"
           error={errors.phone}
-          hint="Shared with the chef only after they accept."
+          hint="A 10-digit Indian mobile number."
         >
           <input
             id="b-phone"
             type="tel"
             inputMode="tel"
+            autoComplete="tel-national"
+            aria-invalid={Boolean(errors.phone)}
+            aria-describedby="b-phone-help"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className={inputClass}
@@ -269,10 +320,12 @@ export default function BookingForm({
           label="Full address"
           htmlFor="b-address"
           error={errors.address}
-          hint="Shared with the chef only after they accept."
         >
           <textarea
             id="b-address"
+            autoComplete="street-address"
+            aria-invalid={Boolean(errors.address)}
+            aria-describedby={errors.address ? "b-address-help" : undefined}
             rows={2}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -280,33 +333,28 @@ export default function BookingForm({
           />
         </Field>
 
-        <Field label="Food notes or allergies" htmlFor="b-notes" error={errors.notes}>
-          <textarea
-            id="b-notes"
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className={inputClass}
-          />
-        </Field>
+        </fieldset>
 
-        <div className="border-t-2 border-dashed border-leaf pt-4">
-          <p className="text-sm">
-            Estimated total
-            <span className="block text-2xl font-bold">{estimate !== null ? formatINR(estimate) : "—"}</span>
-            <span className="text-xs text-ink/70">
+        <div className="rounded-xl bg-sage/60 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Estimated total</p>
+              <p className="mt-0.5 text-xs text-ink/70">
               {guestsValid
-                ? `${guestsNumber} ${guestsNumber === 1 ? "guest" : "guests"} × ${formatINR(pricePerPerson)}. `
-                : ""}
-              Groceries and extras are agreed with the chef.
-            </span>
-          </p>
+                ? `${guestsNumber} ${guestsNumber === 1 ? "guest" : "guests"} × ${formatINR(pricePerPerson)}`
+                : "Choose your guest count"}
+              </p>
+            </div>
+            <p aria-live="polite" aria-atomic="true" className="text-2xl font-bold">{estimate !== null ? formatINR(estimate) : "—"}</p>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-ink/70">Groceries and extras are agreed with the chef.</p>
 
           <button type="submit" disabled={sending} className={`${primaryButton} mt-4 w-full`}>
             {sending ? "Sending..." : "Send request"}
           </button>
+          <div className="mt-3"><CancellationNote /></div>
           <p className="mt-3 text-center text-xs text-ink/70">
-            No payment now. You pay the chef directly after the meal.
+            No charge now. Pay the chef after the meal.
           </p>
         </div>
 

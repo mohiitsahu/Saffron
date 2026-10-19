@@ -14,28 +14,36 @@ export type AdminChef = {
   verified: boolean;
   active: boolean;
   createdAt: string; // already formatted for display
+  bio: string;
+  sampleMenu: string;
+  maxGuests: number;
+  pricePerPerson: number;
+  suspended: boolean;
 };
 
 export default function AdminChefRow({ chef }: { chef: AdminChef }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
 
   async function call(url: string, method: "PATCH" | "DELETE", body?: object, confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return;
+    if (note.trim().length < 5) { setError("Add an admin note before making a change."); return; }
     setBusy(true);
     setError("");
     try {
       const res = await fetch(url, {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, note }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "That didn't work. Try again.");
         return;
       }
+      setNote("");
       router.refresh();
     } catch {
       setError("Network problem. Try again.");
@@ -73,7 +81,7 @@ export default function AdminChefRow({ chef }: { chef: AdminChef }) {
             )}
             {!chef.active && (
               <span className="rounded-full border border-ink/40 px-2.5 py-0.5 text-xs font-semibold text-ink/70">
-                Hidden
+                {chef.suspended ? "Admin-hidden" : "Paused"}
               </span>
             )}
           </div>
@@ -118,6 +126,9 @@ export default function AdminChefRow({ chef }: { chef: AdminChef }) {
           )}
         </div>
       </div>
+
+      <details className="mt-3 text-sm"><summary className="cursor-pointer font-semibold text-leaf">Review profile details</summary><p className="mt-2 whitespace-pre-wrap">{chef.bio}</p><p className="mt-2">₹{chef.pricePerPerson} per guest · up to {chef.maxGuests} guests</p><p className="mt-2 whitespace-pre-wrap">{chef.sampleMenu}</p>{chef.suspended && <p className="mt-2 text-danger">Hidden by an administrator. The chef cannot reactivate this listing.</p>}</details>
+      <label className="mt-3 block text-sm">Admin note<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Reason for this change" className="mt-1 w-full rounded-lg border border-leaf/30 bg-cream p-3" /></label>
 
       {error && (
         <p className="mt-3 text-sm font-medium text-danger" role="alert">

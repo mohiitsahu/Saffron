@@ -62,7 +62,7 @@ export async function getCompletedMap(userIds: string[]): Promise<Map<string, nu
 export async function getChefCities(): Promise<CityOption[]> {
   const rows = await prisma.chefProfile.groupBy({
     by: ["city"],
-    where: { active: true },
+    where: { active: true, suspended: false },
     _count: { _all: true },
   });
 
@@ -81,7 +81,7 @@ export async function getChefCities(): Promise<CityOption[]> {
 // Cuisines that active chefs actually cook, with counts. Used for the cuisine filter.
 export async function getChefCuisines(): Promise<CuisineOption[]> {
   const rows = await prisma.chefProfile.findMany({
-    where: { active: true },
+    where: { active: true, suspended: false },
     select: { cuisines: true },
   });
 

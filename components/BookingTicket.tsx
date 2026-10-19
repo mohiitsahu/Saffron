@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BookingView } from "@/lib/bookings";
 import { formatDateTimeIST, formatINR } from "@/lib/format";
-import { dangerButton, primaryButton } from "@/lib/ui";
+import { dangerButton, outlineButton, primaryButton } from "@/lib/ui";
 import ReviewForm from "@/components/ReviewForm";
+import { useBookingFeedback } from "@/components/BookingFeedback";
+import BookingTimeProposal from "@/components/BookingTimeProposal";
+import CancellationNote from "@/components/CancellationNote";
+import ReportForm from "@/components/ReportForm";
 
 const STATUS: Record<BookingView["status"], { label: string; className: string }> = {
   REQUESTED: { label: "Requested", className: "bg-saffron text-ink" },
@@ -29,16 +33,36 @@ export default function BookingTicket({
   defaultOpen?: boolean;
 }) {
   const router = useRouter();
+  const reportSuccess = useBookingFeedback();
+  const [refreshing, startRefresh] = useTransition();
   const [open, setOpen] = useState(defaultOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmation, setConfirmation] = useState<{ action: "decline" | "cancel"; text: string } | null>(null);
+  const confirmationId = useId();
+  const keepRef = useRef<HTMLButtonElement>(null);
+  const actionRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (confirmation) keepRef.current?.focus();
+    else actionRef.current?.focus();
+  }, [confirmation]);
+
+  function dismissConfirmation() {
+    setConfirmation(null);
+  }
+
+  function confirmAction(action: "decline" | "cancel", text: string, button: HTMLButtonElement) {
+    actionRef.current = button;
+    setConfirmation({ action, text });
+  }
 
   const isChef = booking.role === "chef";
   const isRequested = booking.status === "REQUESTED";
   const isAccepted = booking.status === "ACCEPTED";
   // Chef: answers a new request with Accept or Decline, then can cancel or complete once accepted.
   // Customer: can cancel (withdraw) a requested or accepted booking.
-  const canAccept = isChef && isRequested && !booking.eventPassed;
+  const canAccept = isChef && isRequested && !booking.eventPassed && !booking.proposedEventDate;
   const canDecline = isChef && isRequested;
   // After the event time a booking is closed by completing it, not by cancelling.
   const canCancel = !booking.eventPassed && (isChef ? isAccepted : isRequested || isAccepted);
@@ -59,8 +83,8 @@ export default function BookingTicket({
     cancelledText ? ` · ${cancelledText}` : ""
   }`;
 
-  async function act(action: "accept" | "decline" | "cancel" | "complete", confirmText?: string) {
-    if (confirmText && !window.confirm(confirmText)) return;
+  async function act(action: "accept" | "decline" | "cancel" | "complete") {
+    setConfirmation(null);
     setBusy(true);
     setError("");
     try {
@@ -74,7 +98,14 @@ export default function BookingTicket({
         setError(data.error ?? "Something went wrong. Try again.");
         return;
       }
-      router.refresh();
+      const messages = {
+        accept: { title: "Booking accepted", detail: `Booking #${shortId} is in Confirmed with contact details.` },
+        decline: { title: "Request declined", detail: `Request #${shortId} has moved to History.` },
+        cancel: { title: isRequested ? "Request cancelled" : "Booking cancelled", detail: `Find ticket #${shortId} in History.` },
+        complete: { title: "Booking completed", detail: `Booking #${shortId} is complete. The customer can now leave a review.` },
+      };
+      reportSuccess?.(messages[action]);
+      startRefresh(() => router.refresh());
     } catch {
       setError("Network problem. Check your connection and try again.");
     } finally {
@@ -105,6 +136,7 @@ export default function BookingTicket({
           <dd className="font-semibold">{booking.area}</dd>
         </div>
       </dl>
+      <BookingTimeProposal booking={booking} />
 
       {booking.notes && (
         <p className="mt-4 text-sm">
@@ -155,20 +187,20 @@ export default function BookingTicket({
       {(canAccept || canDecline || canComplete || canCancel) && (
         <div className="mt-4 flex flex-wrap gap-3">
           {canAccept && (
-            <button type="button" disabled={busy} onClick={() => act("accept")} className={primaryButton}>
+            <button type="button" disabled={busy || refreshing || Boolean(confirmation)} onClick={() => act("accept")} className={primaryButton}>
               Accept
             </button>
           )}
           {canComplete && (
-            <button type="button" disabled={busy} onClick={() => act("complete")} className={primaryButton}>
+            <button type="button" disabled={busy || refreshing || Boolean(confirmation)} onClick={() => act("complete")} className={primaryButton}>
               Mark as completed
             </button>
           )}
           {canDecline && (
             <button
               type="button"
-              disabled={busy}
-              onClick={() => act("decline", declineConfirm)}
+              disabled={busy || refreshing || Boolean(confirmation)}
+              onClick={(e) => confirmAction("decline", declineConfirm, e.currentTarget)}
               className={dangerButton}
             >
               Decline
@@ -177,13 +209,30 @@ export default function BookingTicket({
           {canCancel && (
             <button
               type="button"
-              disabled={busy}
-              onClick={() => act("cancel", cancelConfirm)}
+              disabled={busy || refreshing || Boolean(confirmation)}
+              onClick={(e) => confirmAction("cancel", cancelConfirm, e.currentTarget)}
               className={dangerButton}
             >
               {isRequested ? "Cancel request" : "Cancel booking"}
             </button>
           )}
+        </div>
+      )}
+
+      {confirmation && (
+        <div role="alertdialog" aria-modal="false" aria-labelledby={confirmationId}
+          className="mt-4 rounded-xl border border-danger/40 bg-danger/5 p-4"
+          onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); dismissConfirmation(); } }}>
+          <p id={confirmationId} className="text-sm font-medium">{confirmation.text}</p>
+          {confirmation.action === "cancel" && <div className="mt-2"><CancellationNote /></div>}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button ref={keepRef} type="button" onClick={dismissConfirmation} className={outlineButton}>
+              Keep {isRequested ? "request" : "booking"}
+            </button>
+            <button type="button" onClick={() => act(confirmation.action)} className={dangerButton}>
+              {confirmation.action === "decline" ? "Confirm decline" : "Confirm cancellation"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -220,6 +269,7 @@ export default function BookingTicket({
           {error}
         </p>
       )}
+      <div className="mt-4"><ReportForm targetType="booking" targetId={booking.id} /></div>
     </>
   );
 
@@ -240,7 +290,7 @@ export default function BookingTicket({
         >
           <span className="min-w-0">
             <span className="block font-heading text-xs font-bold uppercase tracking-widest text-leaf">
-              Order ticket · #{shortId}
+              Booking · #{shortId}
             </span>
             <span className="mt-1 block text-lg font-bold">
               {roleLabel}
@@ -262,11 +312,11 @@ export default function BookingTicket({
   }
 
   return (
-    <article className="rounded-2xl border-2 border-dashed border-leaf/60 bg-cream p-5 shadow-soft transition-shadow duration-300 hover:shadow-lift">
+    <article className="rounded-2xl border border-leaf/30 bg-cream p-5 sm:p-6 shadow-soft transition-shadow duration-300 hover:shadow-lift">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-heading text-xs font-bold uppercase tracking-widest text-leaf">
-            Order ticket · #{shortId}
+            Booking · #{shortId}
           </p>
           <h3 className="mt-1 text-xl font-bold">
             {roleLabel}

@@ -6,12 +6,13 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 const bodySchema = z
-  .object({ verified: z.boolean().optional(), active: z.boolean().optional() })
+  .object({ verified: z.boolean().optional(), active: z.boolean().optional(), note: z.string().trim().min(5).max(1000) })
   .refine((v) => v.verified !== undefined || v.active !== undefined, "Nothing to change.");
 
 // Admin: verify / unverify a chef, or hide / show their profile.
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  if (!(await getAdminSession())) {
+  const admin = await getAdminSession();
+  if (!admin) {
     return NextResponse.json({ error: "Not allowed." }, { status: 403 });
   }
 
@@ -24,12 +25,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
+    return NextResponse.json({ error: "Choose an action and add an admin note (5–1000 characters)." }, { status: 400 });
   }
 
-  const result = await prisma.chefProfile.updateMany({
-    where: { id: params.id },
-    data: parsed.data,
+  const profile = await prisma.chefProfile.findUnique({ where: { id: params.id }, select: { userId: true } });
+  if (!profile) return NextResponse.json({ error: "Chef not found." }, { status: 404 });
+  const { note, ...changes } = parsed.data;
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${profile.userId}))`;
+    const updated = await tx.chefProfile.updateMany({
+      where: { id: params.id }, data: { ...changes, ...(changes.active !== undefined ? { suspended: !changes.active } : {}) },
+    });
+    if (updated.count) await tx.adminAction.create({ data: { actorId: admin.user.id, targetId: params.id, action: JSON.stringify(changes), note } });
+    return updated;
   });
   if (result.count === 0) {
     return NextResponse.json({ error: "Chef not found." }, { status: 404 });

@@ -107,6 +107,7 @@ function row(overrides: Record<string, unknown> = {}) {
     customerId: "cust",
     chefId: "chef",
     eventDate: FUTURE,
+    proposedEventDate: null,
     guests: 4,
     city: "Bhopal",
     area: "Arera Colony",
@@ -195,18 +196,18 @@ describe("settleStaleBookings", () => {
 
   it("expires old requests and completes old accepted bookings, logging each change", async () => {
     db.prisma.booking.findMany.mockResolvedValue([
-      { id: "a", status: "REQUESTED" },
-      { id: "b", status: "ACCEPTED" },
+      { id: "a", status: "REQUESTED", version: 0 },
+      { id: "b", status: "ACCEPTED", version: 0 },
     ]);
     await settleStaleBookings({ customerId: "cust" });
 
     expect(db.prisma.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: "a", status: "REQUESTED" },
-      data: { status: "EXPIRED" },
+      where: { id: "a", status: "REQUESTED", version: 0 },
+      data: { status: "EXPIRED", proposedEventDate: null, version: { increment: 1 } },
     });
     expect(db.prisma.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: "b", status: "ACCEPTED" },
-      data: { status: "COMPLETED" },
+      where: { id: "b", status: "ACCEPTED", version: 0 },
+      data: { status: "COMPLETED", proposedEventDate: null, version: { increment: 1 } },
     });
     expect(db.prisma.bookingEvent.create).toHaveBeenCalledWith({
       data: { bookingId: "a", actorId: null, fromStatus: "REQUESTED", toStatus: "EXPIRED" },

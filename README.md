@@ -20,6 +20,10 @@ Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Prisma + PostgreSQ
 - Email notifications: a chef is emailed about a new request or a cancellation, and a customer
   when a booking is accepted, declined, cancelled or completed
 - Admin page (`/admin`) to verify chefs, hide profiles and remove photos
+- Search by meal date, time (IST), and guest count, with availability and capacity checked on the server
+- Chef time suggestions that customers accept or decline before a request becomes a confirmed booking
+- Cancellation guidance at `/cancellation`, with reporting from bookings and chef profiles
+- Admin review filters, report resolution notes, moderation history, and protected profile suspensions
 
 ## Getting started
 
@@ -98,6 +102,9 @@ Sign out and back in. An **Admin** link appears in the navbar.
 | `npm start` | Run the production build |
 | `npm run lint` | Check the code with ESLint |
 | `npm test` | Run the automated tests once |
+| `npm run test:integration` | Test booking concurrency against temporary PostgreSQL (Docker required) |
+| `npm run test:browser` | Start an isolated preview with disposable test accounts (Docker required) |
+| `npm run test:build` | Build a temporary copy against disposable PostgreSQL (test sign-in only, no .env access) |
 | `npm run test:watch` | Re-run tests whenever a file changes |
 | `npx prisma migrate dev` | Apply new migrations to your development database |
 | `npx prisma migrate deploy` | Apply migrations to a production database |
@@ -115,11 +122,33 @@ Google login: the database is replaced by a stand-in. They cover the booking sta
 whom, expiry of old requests, date and phone validation, photo type checks, and the booking
 API's limits. Run them before every deploy.
 
+### PostgreSQL concurrency tests
+
+Start Docker Desktop (Linux containers), then run:
+
+```bash
+npm run test:integration
+```
+
+The runner starts a temporary `postgres:16-alpine` container on a random localhost port,
+applies the committed migrations, and calls the real API routes with simultaneous requests.
+It checks overlapping acceptances, pending and hourly quotas, duplicate requests, and blocked
+days. Sign-in and email delivery are mocked; database operations use real PostgreSQL.
+The runner removes its container and temporary generated client afterward, including on test
+failure. The first run may download the PostgreSQL image. It does not load application `.env`
+files or connect to your application database. Normal `npm test` runs only the unit tests.
+
+For a manual browser check, run `npm run test:browser` and open the localhost URL printed
+in the terminal. Visit `/signin` to choose the test customer or chef. This preview copies the
+app to a temporary folder and replaces Google sign-in only in that copy. The production
+authentication code is unchanged. Press Enter in its terminal to stop and clean up when finished. Google OAuth
+and real email delivery need separate staging checks.
+
 ## Project layout
 
 ```
 app/            pages and API routes (App Router)
-  api/          bookings, chef profile, photos, reviews, notifications, admin
+  api/          bookings, chef profile, photos, reviews, admin
 components/     React components
 lib/            shared logic: booking rules, validation, auth, formatting
 prisma/         database schema and migrations

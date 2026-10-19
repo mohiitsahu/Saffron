@@ -12,8 +12,6 @@ git status
 # Commit your work to a branch or make a copy of the folder before replacing source files.
 ```
 
-This package includes complete replacement files; see `README_REPLACE_FILES.md` for exact paths.
-
 ## 1. Local prerequisites
 
 - Node.js 20 LTS or newer compatible with these pinned package versions
@@ -24,10 +22,11 @@ In PowerShell:
 
 ```powershell
 npm ci
-Copy-Item .env.example .env.local
+if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
 ```
 
-Fill `.env.local` with correct credentials:
+Fill `.env` with correct credentials. Both Next.js and Prisma CLI load this file;
+Prisma CLI does not automatically load `.env.local`. Keep an existing `.env` rather than overwriting it.
 
 ```dotenv
 DATABASE_URL="postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require"
@@ -56,6 +55,7 @@ Store secrets in hosting environment settings, never in Git. Do not put them in 
 npx prisma validate
 npx tsc --noEmit
 npm test
+npm run test:integration # requires Docker Desktop with Linux containers running
 npm run lint
 npm run build
 ```
@@ -63,6 +63,20 @@ npm run build
 If any command fails, fix it before deployment. Build may need env vars and a database connection.
 
 ## 3. Database migrations
+
+The discovery/proposals/reports release adds `20261020020000_discovery_proposals_reports`.
+Apply it before running this code against an existing database. It adds proposal fields,
+moderation flags, reports, and the admin action log without
+removing existing bookings. Existing profiles keep their current visibility. Back up first.
+Stop your local dev server before regenerating Prisma on Windows so its engine DLL is not locked:
+
+```powershell
+npx prisma migrate deploy
+npx prisma generate
+```
+
+Restart the app afterward. These commands use your locally configured environment; the
+isolated test runners use only their own temporary databases.
 
 Only use a fresh *staging* database initially. Never run `prisma migrate dev` against production.
 

@@ -6,6 +6,7 @@ export const bookingSelect = {
   customerId: true,
   chefId: true,
   eventDate: true,
+  proposedEventDate: true,
   guests: true,
   city: true,
   area: true,
@@ -41,6 +42,7 @@ export type BookingView = {
   status: BookingStatus;
   createdAt: string;
   eventDate: string;
+  proposedEventDate: string | null;
   eventPassed: boolean;
   guests: number;
   city: string;
@@ -76,7 +78,8 @@ export function serializeBooking(booking: BookingRow, viewerId: string): Booking
     status: booking.status,
     createdAt: booking.createdAt.toISOString(),
     eventDate: booking.eventDate.toISOString(),
-    eventPassed: booking.eventDate.getTime() <= Date.now(),
+    proposedEventDate: booking.status === "REQUESTED" ? booking.proposedEventDate?.toISOString() ?? null : null,
+    eventPassed: Math.max(booking.eventDate.getTime(), booking.status === "REQUESTED" ? booking.proposedEventDate?.getTime() ?? 0 : 0) <= Date.now(),
     guests: booking.guests,
     city: booking.city,
     area: booking.area,
@@ -115,13 +118,13 @@ export async function settleStaleBookings(scope: Prisma.BookingWhereInput = {}) 
           scope,
           {
             OR: [
-              { status: "REQUESTED", eventDate: { lte: new Date(now) } },
+              { status: "REQUESTED", eventDate: { lte: new Date(now) }, OR: [{ proposedEventDate: null }, { proposedEventDate: { lte: new Date(now) } }] },
               { status: "ACCEPTED", eventDate: { lte: new Date(now - AUTO_COMPLETE_AFTER_MS) } },
             ],
           },
         ],
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, version: true },
       take: 200,
     });
     if (stale.length === 0) return;
@@ -131,8 +134,8 @@ export async function settleStaleBookings(scope: Prisma.BookingWhereInput = {}) 
         const next: BookingStatus = booking.status === "REQUESTED" ? "EXPIRED" : "COMPLETED";
         // Only change it if nobody else changed it first.
         const result = await tx.booking.updateMany({
-          where: { id: booking.id, status: booking.status },
-          data: { status: next },
+          where: { id: booking.id, status: booking.status, version: booking.version },
+          data: { status: next, proposedEventDate: null, version: { increment: 1 } },
         });
         if (result.count === 1) {
           await tx.bookingEvent.create({
@@ -162,7 +165,7 @@ function fail(httpStatus: number, error: string): Transition {
 // Customer: can cancel (withdraw) a requested or accepted booking.
 export function resolveTransition(
   action: BookingAction,
-  booking: { status: BookingStatus; eventDate: Date },
+  booking: { status: BookingStatus; eventDate: Date; proposedEventDate?: Date | null },
   role: "customer" | "chef",
   now: Date = new Date()
 ): Transition {
@@ -189,7 +192,7 @@ export function resolveTransition(
         return fail(409, "Only requested or accepted bookings can be cancelled.");
       }
       // Once the event time has passed, a booking is closed by completing it, not cancelling it.
-      if (booking.eventDate.getTime() <= now.getTime()) {
+      if (Math.max(booking.eventDate.getTime(), booking.proposedEventDate?.getTime() ?? 0) <= now.getTime()) {
         return fail(409, "The event time has passed, so this can't be cancelled.");
       }
       // A chef answers a new request with Accept or Decline. Cancel is only for accepted bookings.

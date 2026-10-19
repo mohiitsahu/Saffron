@@ -35,6 +35,7 @@ model User {
   phone         String?
   role          Role      @default(CUSTOMER)
   createdAt     DateTime  @default(now())
+  notificationsReadAt DateTime?
 
   accounts Account[]
   sessions Session[]
@@ -46,6 +47,7 @@ model User {
   chefBookings     Booking[] @relation("ChefBookings")
   reviewsWritten   Review[]  @relation("ReviewCustomer")
   reviewsReceived  Review[]  @relation("ReviewChef")
+  reports Report[]
 }
 
 model Account {
@@ -97,10 +99,13 @@ model ChefProfile {
   sampleMenu      String   @default("") @db.Text // one dish per line
   verified        Boolean  @default(false)
   active          Boolean  @default(true)
+  suspended       Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reports Report[]
 
   @@index([city, active])
 }
@@ -134,6 +139,8 @@ model Booking {
   customerId     String
   chefId         String        // the chef's User id
   eventDate      DateTime
+  proposedEventDate DateTime?
+  version        Int           @default(0)
   guests         Int
   city           String
   area           String
@@ -149,6 +156,7 @@ model Booking {
   chef     User    @relation("ChefBookings", fields: [chefId], references: [id])
   review   Review?
   events   BookingEvent[]
+  reports Report[]
 
   @@index([customerId])
   @@index([chefId, status])
@@ -174,6 +182,7 @@ model BookingEvent {
   id         String         @id @default(cuid())
   bookingId  String
   actorId    String?
+  kind       String?
   fromStatus BookingStatus?
   toStatus   BookingStatus
   createdAt  DateTime       @default(now())
@@ -181,4 +190,34 @@ model BookingEvent {
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([bookingId, createdAt])
+}
+
+model Report {
+  id String @id @default(cuid())
+  reporterId String
+  bookingId String?
+  chefProfileId String?
+  reason String
+  details String @db.Text
+  status String @default("OPEN")
+  resolutionNote String? @db.Text
+  resolvedById String?
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+  reporter User @relation(fields: [reporterId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+  chefProfile ChefProfile? @relation(fields: [chefProfileId], references: [id])
+  @@unique([reporterId, bookingId])
+  @@unique([reporterId, chefProfileId])
+  @@index([status, createdAt])
+}
+
+model AdminAction {
+  id String @id @default(cuid())
+  actorId String
+  targetId String
+  action String
+  note String @db.Text
+  createdAt DateTime @default(now())
+  @@index([createdAt])
 }

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     bookingEvent: { create: vi.fn() },
     chefBlockedDay: { findUnique: vi.fn() },
+    chefProfile: { findUnique: vi.fn() },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -53,10 +54,12 @@ beforeEach(() => {
       booking: mocks.prisma.booking,
       bookingEvent: mocks.prisma.bookingEvent,
       chefBlockedDay: mocks.prisma.chefBlockedDay,
+      chefProfile: mocks.prisma.chefProfile,
     })
   );
   mocks.prisma.booking.findFirst.mockResolvedValue(null);
   mocks.prisma.chefBlockedDay.findUnique.mockResolvedValue(null);
+  mocks.prisma.chefProfile.findUnique.mockResolvedValue({ suspended: false });
   mocks.prisma.booking.updateMany.mockResolvedValue({ count: 1 });
 });
 

@@ -22,6 +22,8 @@ const KINDS: BookingEmailKind[] = [
   "cancelledByCustomer",
   "cancelledByChef",
   "completed",
+  "rescheduled",
+  "proposalAccepted",
 ];
 
 describe("buildBookingEmail", () => {
@@ -152,12 +154,12 @@ describe("notifyBooking", () => {
 
   const sentTo = () => JSON.parse(fetchSpy.mock.calls[0][1].body).to[0];
 
-  it.each(["requested", "cancelledByCustomer"] as const)("sends %s to the chef", async (kind) => {
+  it.each(["requested", "cancelledByCustomer", "proposalAccepted"] as const)("sends %s to the chef", async (kind) => {
     await notifyBooking(kind, booking);
     expect(sentTo()).toBe("asha@example.com");
   });
 
-  it.each(["accepted", "declined", "cancelledByChef", "completed"] as const)("sends %s to the customer", async (kind) => {
+  it.each(["accepted", "declined", "cancelledByChef", "completed", "rescheduled"] as const)("sends %s to the customer", async (kind) => {
     await notifyBooking(kind, booking);
     expect(sentTo()).toBe("rohan@example.com");
   });

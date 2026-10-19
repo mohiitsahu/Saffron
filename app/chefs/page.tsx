@@ -13,6 +13,7 @@ import {
 } from "@/lib/chefs";
 import { cityVariants, findCity } from "@/lib/cities";
 import { outlineButton } from "@/lib/ui";
+import { discoveryFilter } from "@/lib/discovery";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ type SearchParams = {
   maxPrice?: string | string[];
   verified?: string | string[];
   cuisine?: string | string[];
+  date?: string | string[];
+  time?: string | string[];
+  guests?: string | string[];
 };
 
 function one(value?: string | string[]) {
@@ -46,7 +50,11 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
     .filter(Boolean)
     .slice(0, 10);
 
-  const where: Prisma.ChefProfileWhereInput = { active: true };
+  const date = one(searchParams.date).slice(0, 10);
+  const time = one(searchParams.time).slice(0, 5);
+  const guests = one(searchParams.guests).slice(0, 3);
+  const availability = discoveryFilter(date, time, guests);
+  const where: Prisma.ChefProfileWhereInput = availability.where;
   if (city) {
     where.OR = cityVariants(city).map(
       (name): Prisma.ChefProfileWhereInput => ({ city: { contains: name, mode: "insensitive" } })
@@ -70,7 +78,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
 
   // Search by chef name, cuisine, dish or bio. Every word typed must match somewhere.
   const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const matched = tokens.length
+  const matched = availability.error ? [] : tokens.length
     ? rows.filter((chef) => {
         const haystack = [chef.displayName, chef.cuisines.join(" "), chef.sampleMenu, chef.bio, chef.city]
           .join(" ")
@@ -106,6 +114,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
   return (
     <div className="mx-auto w-full max-w-screen-2xl px-4 py-8">
       <ChefsHeader
+        key={[date, time, guests].join("|")}
         initial={{
           q,
           city,
@@ -113,11 +122,14 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
           maxPrice: maxPrice ? String(maxPrice) : "",
           verified: verifiedOnly,
           cuisine: cuisineFilter.join(","),
+          date, time, guests,
         }}
         chefCities={chefCities}
         cuisineOptions={cuisineOptions}
         title={title}
       />
+      {availability.error && <p role="alert" className="mt-4 text-danger">{availability.error}</p>}
+      {date && !availability.error && <p className="mt-4 text-sm text-ink/70">Availability is checked in IST. {time ? "Chefs have at least 4 hours between bookings." : "Choose a time to include chefs with other bookings that day."} A request still needs the chef&apos;s confirmation.</p>}
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-b border-leaf/20 pb-4 text-sm">
         <p>
@@ -132,11 +144,11 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
         </p>
       </div>
 
-      {visible.length === 0 ? (
+      {availability.error || visible.length === 0 ? (
         <div className="mt-6 animate-scale-in rounded-2xl border-2 border-dashed border-leaf/50 bg-sage/70 p-8 text-center shadow-soft">
           <h2 className="text-xl font-bold">No chefs match yet</h2>
           <p className="mx-auto mt-2 max-w-md text-ink/80">
-            Try a different city or cuisine, or raise the maximum price. Know a great home chef? Invite
+            Try another date, time, guest count, city or cuisine. Know a great home chef? Invite
             them to join Saffron.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
@@ -154,6 +166,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
               className={`h-full animate-fade-up [&>a]:h-full ${visible.length === 1 ? "xl:col-span-2" : ""}`}
             >
               <ChefListCard
+                bookingQuery={new URLSearchParams({ ...(date && time ? { eventDate: `${date}T${time}` } : {}), ...(guests ? { guests } : {}) }).toString()}
                 chef={chef}
                 avg={ratings.get(chef.userId)?.avg ?? null}
                 count={countOf(chef.userId)}

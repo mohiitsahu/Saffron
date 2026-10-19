@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { countPendingRequests } from "@/lib/notifications";
+import { countPendingRequests } from "@/lib/pendingRequests";
 import { formatINR, menuLines } from "@/lib/format";
 import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import ShareProfile from "@/components/ShareProfile";
@@ -35,6 +35,7 @@ export default async function ChefIdCardPage() {
       sampleMenu: true,
       verified: true,
       active: true,
+      suspended: true,
       createdAt: true,
     },
   });
@@ -78,6 +79,7 @@ export default async function ChefIdCardPage() {
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
       <h1 className="text-3xl font-bold">Your chef profile</h1>
       <p className="mt-1 text-ink/70">This is how you appear on Saffron.</p>
+      {profile.suspended && <p role="status" className="mt-4 rounded-xl border border-danger/40 bg-danger/5 p-4 text-sm">An administrator has hidden your listing. You can edit your details, but an administrator must restore visibility.</p>}
 
       {pending > 0 && (
         <Link

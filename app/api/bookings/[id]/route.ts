@@ -38,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const userId = session.user.id;
   const booking = await prisma.booking.findUnique({
     where: { id: params.id },
-    select: { id: true, customerId: true, chefId: true, status: true, eventDate: true },
+    select: { id: true, customerId: true, chefId: true, status: true, eventDate: true, proposedEventDate: true, version: true },
   });
 
   // Strangers get the same answer as a missing booking.
@@ -53,9 +53,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const outcome: Outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.chefId}))`;
+    if (parsed.data.action === "accept" && booking.proposedEventDate) {
+      return { ok: false, status: 409, error: "Withdraw the proposed time first, or wait for the customer's answer." };
+    }
     if (parsed.data.action === "accept") {
+      const profile = await tx.chefProfile.findUnique({ where: { userId: booking.chefId }, select: { suspended: true } });
+      if (profile?.suspended) return { ok: false, status: 409, error: "An administrator has hidden this chef profile. This request cannot be accepted." };
       // One accept at a time per chef, so two accepts at the same moment can't both pass the check below.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.chefId}))`;
 
       // The chef may have blocked this day after the customer sent the request.
       // Share the same lock as day-blocking and booking creation.
@@ -94,8 +99,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     // Only update if the status is still what we just checked, so two clicks can't both win.
     const updated = await tx.booking.updateMany({
-      where: { id: booking.id, status: booking.status },
-      data: { status: result.status },
+      where: { id: booking.id, status: booking.status, version: booking.version },
+      data: { status: result.status, proposedEventDate: null, version: { increment: 1 } },
     });
     if (updated.count === 0) {
       return {

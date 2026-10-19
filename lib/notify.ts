@@ -20,7 +20,7 @@ export function siteUrl() {
 export async function notifyBooking(kind: BookingEmailKind, booking: NotifyBooking): Promise<void> {
   try {
     // New requests and customer cancellations go to the chef. Everything else goes to the customer.
-    const toChef = kind === "requested" || kind === "cancelledByCustomer";
+    const toChef = kind === "requested" || kind === "cancelledByCustomer" || kind === "proposalAccepted";
     const recipient = toChef ? booking.chef : booking.customer;
     if (!recipient.email) return;
 
