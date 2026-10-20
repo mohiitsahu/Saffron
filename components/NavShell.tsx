@@ -35,6 +35,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
         // Never hide while the mobile menu is open or something inside the bar has focus.
         const busy =
           Boolean(document.getElementById("mobile-menu")) ||
+          Boolean(document.querySelector("dialog[open]")) ||
           Boolean(ref.current?.contains(document.activeElement));
         setHidden(delta > 0 && !busy);
       } else {

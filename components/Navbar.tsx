@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import NavMenu from "@/components/NavMenu";
 import NavShell from "@/components/NavShell";
+import NotificationBell from "@/components/NotificationBell";
 
 export default async function Navbar() {
   const session = await getServerSession(authOptions);
@@ -39,7 +40,10 @@ export default async function Navbar() {
         />
         Saffron
       </Link>
-      <NavMenu links={links} />
+      <div className="flex items-center gap-2">
+        <div className="order-2 lg:order-1"><NavMenu links={links} /></div>
+        {user && <div className="order-1 lg:order-2"><NotificationBell key={user.id} /></div>}
+      </div>
     </NavShell>
   );
 }

@@ -35,6 +35,7 @@ import { getBookingsFor } from "@/lib/bookings";
 import { PATCH as editAccount } from "@/app/api/account/route";
 import { POST as deletionRequest } from "@/app/api/account/deletion-request/route";
 import { POST as contactSupport } from "@/app/api/support/route";
+import { GET as notifications, PATCH as readNotifications } from "@/app/api/notifications/route";
 
 context.session = new AsyncLocalStorage<string>();
 const DAY = 86_400_000;
@@ -129,6 +130,56 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
 });
 afterAll(() => prisma.$disconnect());
+
+describe("private booking notifications", () => {
+  it("only shows the other party's events and never exposes contact details", async () => {
+    const profile = await chef(); const customerId = await customer();
+    const booking = await seedBooking(customerId, profile.userId);
+    await prisma.bookingEvent.createMany({ data: [
+      { bookingId: booking.id, actorId: customerId, toStatus: "REQUESTED" },
+      { bookingId: booking.id, actorId: profile.userId, toStatus: "REQUESTED", kind: "time_propose" },
+    ] });
+    const chefFeed = await (await asUser(profile.userId, notifications)).json();
+    expect(chefFeed.unread).toBe(1);
+    expect(chefFeed.items[0].title).toBe("New booking request");
+    expect(chefFeed.items[0].href).toContain(`tab=requests&booking=${booking.id}`);
+    const customerFeed = await (await asUser(customerId, notifications)).json();
+    expect(customerFeed.unread).toBe(1);
+    expect(customerFeed.items[0].title).toBe("A new time to review");
+    const response = await asUser(customerId, notifications);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    const text = await response.text();
+    expect(text).not.toContain(booking.phone);
+    expect(text).not.toContain(booking.address);
+    const strangerFeed = await (await asUser(await customer(), notifications)).json();
+    expect(strangerFeed).toMatchObject({ items: [], unread: 0 });
+  });
+
+  it("keeps later arrivals unread and never moves the read boundary backward", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    const oldTime = new Date(Date.now() - 60_000);
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED", createdAt: oldTime } });
+    const feed = await (await asUser(customerId, notifications)).json();
+    const later = new Date(Date.parse(feed.through) + 1);
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "CANCELLED", createdAt: later } });
+    expect((await asUser(customerId, () => readNotifications(json({ through: feed.through }, "PATCH")))).status).toBe(200);
+    await asUser(customerId, () => readNotifications(json({ through: oldTime.toISOString() }, "PATCH")));
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: customerId } })).notificationsReadAt?.toISOString()).toBe(feed.through);
+    const next = await (await asUser(customerId, notifications)).json();
+    expect(next.unread).toBe(1);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: profile.userId } })).notificationsReadAt).toBeNull();
+  });
+
+  it("bounds the inbox while counting unread events beyond the visible page", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    await prisma.bookingEvent.createMany({ data: Array.from({ length: 35 }, () => ({ bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED" as const })) });
+    const feed = await (await asUser(customerId, notifications)).json();
+    expect(feed.items).toHaveLength(30);
+    expect(feed.unread).toBe(35);
+    await asUser(customerId, () => readNotifications(json({ through: feed.through }, "PATCH")));
+    expect((await (await asUser(customerId, notifications)).json()).unread).toBe(0);
+  });
+});
 
 describe("booking concurrency against PostgreSQL", () => {
   it("allows only one overlapping acceptance and records only its transition", async () => {

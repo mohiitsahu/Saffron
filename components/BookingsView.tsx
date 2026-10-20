@@ -129,11 +129,13 @@ export default function BookingsView({
   asCustomer,
   showChefTabs,
   initialTab,
+  focusedBooking,
 }: {
   asChef: BookingView[];
   asCustomer: BookingView[];
   showChefTabs: boolean;
   initialTab: Tab;
+  focusedBooking?: BookingView | null;
 }) {
   const [tab, setTab] = useState<Tab>(showChefTabs ? initialTab : "mine");
 
@@ -147,6 +149,13 @@ export default function BookingsView({
     `-mb-px flex min-h-[44px] items-center gap-2 rounded-t-lg border-b-2 px-4 text-base font-semibold transition-all duration-200 ${
       active ? "border-leaf bg-leaf/5 text-leaf" : "border-transparent text-ink/70 hover:bg-sage/50 hover:text-ink"
     }`;
+
+  if (focusedBooking) return <BookingFeedback>
+    <section className="max-w-3xl" aria-label="Booking from your notification">
+      <Link href={`/bookings?tab=${focusedBooking.role === "customer" ? "mine" : "requests"}`} className="mb-5 inline-flex min-h-11 items-center rounded text-sm font-semibold text-leaf">← All bookings</Link>
+      <BookingTicket booking={focusedBooking} />
+    </section>
+  </BookingFeedback>;
 
   return (
     <BookingFeedback>

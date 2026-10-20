@@ -31,7 +31,14 @@ try {
     const guest = await db.user.create({ data: { name: "Test Guest " + (index + 1) } });
     const cook = await db.user.create({ data: { name: "Test Chef " + (index + 1), role: "CHEF", phone: "9123456789",
       chefProfile: { create: { displayName: "Chef " + (index + 1), city: "Bhopal", cuisines: ["indian"], bio: "Disposable chef profile for booking page checks.", pricePerPerson: 500, maxGuests: 10, yearsExperience: 5 } } } });
-    await db.booking.create({ data: { ...sample, customerId: guest.id } });
-    await db.booking.create({ data: { ...sample, id: sample.id + "-customer", chefId: cook.id } });
+    for (const data of [{ ...sample, customerId: guest.id }, { ...sample, id: sample.id + "-customer", chefId: cook.id }]) {
+      const booking = await db.booking.create({ data });
+      await db.bookingEvent.create({ data: {
+        bookingId: booking.id, toStatus: booking.status,
+        actorId: booking.proposedEventDate || booking.status !== "REQUESTED" ? booking.chefId : booking.customerId,
+        kind: booking.proposedEventDate ? "time_propose" : null,
+        createdAt: new Date(Date.now() - index * 3_600_000),
+      } });
+    }
   }
 } finally { await db.$disconnect(); }

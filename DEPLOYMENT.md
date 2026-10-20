@@ -211,3 +211,15 @@ are limited to six per chef and 1 MB each on the server; browser uploads are
 compressed. Photo metadata queries do not load image bytes. Meal photo responses
 revalidate before reuse so removals and hidden listings stop serving images on
 subsequent requests. Verify upload/edit/reorder/delete and admin removal on staging.
+
+## In-app booking updates
+
+Signed-in users have a notification bell with a desktop panel and mobile bottom
+sheet. It reads existing BookingEvent records, excludes the viewer's own actions,
+and shows the latest 30 updates. “Mark all as read” saves the current snapshot's
+time in User.notificationsReadAt without clearing later updates or other accounts.
+The bell refreshes every minute while visible and when returning to the tab.
+No new migration is needed when the existing discovery/proposals migration has
+been applied. Links open the selected booking, including older history, after
+checking that the viewer is a party. Notifications never include booking addresses
+or phone numbers. These are in-app updates, not browser push notifications.
