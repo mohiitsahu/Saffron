@@ -1,12 +1,23 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import NavMenu from "@/components/NavMenu";
 import NavShell from "@/components/NavShell";
 import NotificationBell from "@/components/NotificationBell";
 
+function Brand() {
+  return <Link href="/" className="group inline-flex items-center gap-2.5 rounded font-heading text-2xl font-extrabold tracking-tight text-saffron focus-visible:outline-cream">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src="/logo-192.png" alt="" width={56} height={56} className="h-14 w-14 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-105" />
+    Saffron
+  </Link>;
+}
+
+export function NavbarFallback() {
+  return <NavShell><Brand /><span role="status" className="sr-only">Loading navigation</span></NavShell>;
+}
+
 export default async function Navbar() {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   const user = session?.user;
 
   const isChef = Boolean(user?.isChef);
@@ -26,20 +37,7 @@ export default async function Navbar() {
 
   return (
     <NavShell>
-      <Link
-        href="/"
-        className="group inline-flex items-center gap-2.5 rounded font-heading text-2xl font-extrabold tracking-tight text-saffron focus-visible:outline-cream"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo-192.png"
-          alt=""
-          width={56}
-          height={56}
-          className="h-14 w-14 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-105"
-        />
-        Saffron
-      </Link>
+      <Brand />
       <div className="flex items-center gap-2">
         <div className="order-2 lg:order-1"><NavMenu links={links} /></div>
         {user && <div className="order-1 lg:order-2"><NotificationBell key={user.id} /></div>}

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { settleStaleBookings } from "@/lib/bookings";
 import { todayIST } from "@/lib/availability";
@@ -51,7 +50,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
   const selectedGuests = Number(searchParams.guests);
 
   const [session, agg, reviews, completed, blocked, mealPhotos] = await Promise.all([
-    getServerSession(authOptions),
+    getAppSession(),
     prisma.review.aggregate({
       where: { chefId: chef.userId },
       _avg: { rating: true },

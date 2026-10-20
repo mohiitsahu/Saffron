@@ -3,6 +3,8 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import SearchBar from "@/components/SearchBar";
+import MealSearchPicker from "@/components/MealSearchPicker";
+import { mealSearchLabel } from "@/lib/mealSearch";
 import { FiltersIcon, FlameIcon } from "@/components/Icons";
 import type { CityOption } from "@/lib/cities";
 import type { CuisineOption } from "@/lib/cuisines";
@@ -115,37 +117,7 @@ export default function ChefsHeader({
         pending={isPending}
       />
 
-      <form aria-labelledby="availability-heading" className="mt-5 min-w-0 rounded-2xl border border-leaf/20 bg-white/50 p-4 sm:p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const data = new FormData(e.currentTarget);
-          push({ date: String(data.get("date") ?? ""), time: String(data.get("time") ?? ""), guests: String(data.get("guests") ?? "") });
-        }}>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-          <div className="min-w-0">
-            <h2 id="availability-heading" className="text-base font-bold">Plan your meal</h2>
-            <p id="availability-hint" className="mt-1 text-sm text-ink/70">Add a date and guests to narrow your search. All times are in IST.</p>
-          </div>
-          {(initial.date || initial.time || initial.guests) && <button type="button" onClick={() => push({ date: "", time: "", guests: "" })} className="min-h-11 text-sm font-semibold text-leaf underline underline-offset-4">Clear meal details</button>}
-        </div>
-        <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] lg:items-end">
-          <div className="col-span-2 min-w-0 lg:col-span-1">
-            <label htmlFor="search-date" className={labelClass}>Meal date</label>
-            <input id="search-date" name="date" type="date" defaultValue={initial.date} aria-describedby="availability-hint" className={inputClass} />
-          </div>
-          <div className="min-w-0">
-            <label htmlFor="search-time" className={labelClass}>Time (optional)</label>
-            <input id="search-time" name="time" type="time" defaultValue={initial.time} aria-describedby="availability-hint" className={inputClass} />
-          </div>
-          <div className="min-w-0">
-            <label htmlFor="search-guests" className={labelClass}>Guests</label>
-            <input id="search-guests" name="guests" type="number" inputMode="numeric" placeholder="Any" min="1" max="100" defaultValue={initial.guests} className={inputClass} />
-          </div>
-          <button type="submit" disabled={isPending} className={`${outlineButton} col-span-2 min-w-0 lg:col-span-1 lg:min-h-[50px]`}>{isPending ? "Checking…" : "Check availability"}</button>
-        </div>
-      </form>
-
-      <div className="mt-8 sm:mt-10">
+      <div className="mt-6 sm:mt-8">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-leaf">
           <FlameIcon className="h-4 w-4" />
           Meet your match
@@ -159,7 +131,7 @@ export default function ChefsHeader({
             </p>
           </div>
 
-          <div className="flex w-full min-w-0 items-center gap-2 xl:w-auto">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 xl:w-auto">
             <button
               type="button"
               aria-expanded={showFilters}
@@ -174,9 +146,13 @@ export default function ChefsHeader({
               )}
             </button>
 
+            <MealSearchPicker value={{ date: initial.date, time: initial.time, guests: initial.guests }} pending={isPending} onApply={(meal) => push(meal)} />
+
             <label htmlFor="sort" className="sr-only">
               Sort chefs
             </label>
+            <div className="relative ml-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-leaf/30 bg-white/60 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-leaf sm:ml-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:border-0 sm:bg-transparent" title={`Sort: ${SORT_LABELS[sort]}`}>
+            <svg className="sm:hidden" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 4v16m-4-4 4 4 4-4M16 20V4m-4 4 4-4 4 4" /></svg>
             <select
               id="sort"
               value={sort}
@@ -184,7 +160,7 @@ export default function ChefsHeader({
                 setSort(e.target.value);
                 push({ sort: e.target.value });
               }}
-              className="min-h-[48px] w-full min-w-0 flex-1 rounded-lg border border-leaf/30 bg-white/60 px-3 text-base font-medium xl:w-auto"
+              className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0 sm:static sm:min-h-12 sm:rounded-lg sm:border sm:border-leaf/30 sm:bg-white/60 sm:px-3 sm:text-base sm:font-medium sm:opacity-100"
             >
               {Object.entries(SORT_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -192,8 +168,17 @@ export default function ChefsHeader({
                 </option>
               ))}
             </select>
+            </div>
           </div>
         </div>
+
+        {(initial.date || initial.time || initial.guests) && <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Applied meal details">
+          <button type="button" disabled={isPending} onClick={() => push({ date: "", time: "", guests: "" })}
+            aria-label={`Remove meal details: ${mealSearchLabel(initial)}`}
+            className="inline-flex min-h-11 max-w-full items-center gap-3 rounded-full border border-leaf/30 bg-leaf/5 px-4 py-2 text-left text-sm font-medium text-leaf hover:bg-sage disabled:opacity-60">
+            <span className="min-w-0 break-words">{mealSearchLabel(initial)}</span><span aria-hidden="true" className="shrink-0 text-lg">×</span>
+          </button>
+        </div>}
 
         {showFilters && (
           <div id="filters-panel" className="mt-4 animate-slide-down space-y-5 rounded-xl bg-sage/70 p-4 shadow-soft">

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { notificationCopy, notificationScope } from "@/lib/notifications";
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), update: vi.fn(), transaction: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), update: vi.fn(), transaction: vi.fn(), user: vi.fn(), event: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("@/lib/prisma", () => ({ prisma: { user: { updateMany: mocks.update }, $transaction: mocks.transaction } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { user: { updateMany: mocks.update, findUnique: mocks.user }, bookingEvent: { findFirst: mocks.event }, $transaction: mocks.transaction } }));
 import { GET, PATCH } from "@/app/api/notifications/route";
 const mark = (body: unknown) => PATCH(new Request("http://localhost/api/notifications", { method: "PATCH", body: JSON.stringify(body) }));
 
@@ -13,7 +13,7 @@ beforeEach(() => { vi.resetAllMocks(); });
 describe("notification access and validation", () => {
   it("requires sign-in for both reading and marking updates", async () => {
     mocks.session.mockResolvedValue(null);
-    expect((await GET()).status).toBe(401);
+    expect((await GET(new Request("http://localhost/api/notifications"))).status).toBe(401);
     expect((await mark({})).status).toBe(401);
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
@@ -28,6 +28,18 @@ describe("notification access and validation", () => {
       booking: { OR: [{ customerId: "u1" }, { chefId: "u1" }] },
       OR: [{ actorId: null }, { actorId: { not: "u1" } }],
     });
+  });
+  it("checks only unread existence for the background dot, without loading the inbox", async () => {
+    mocks.session.mockResolvedValue({ user: { id: "u1" } });
+    const readAt = new Date("2026-01-01T00:00:00Z");
+    mocks.user.mockResolvedValue({ notificationsReadAt: readAt });
+    mocks.event.mockResolvedValue({ id: "event1" });
+    const response = await GET(new Request("http://localhost/api/notifications?summary=1"));
+    expect(await response.json()).toEqual({ hasUnread: true });
+    expect(mocks.event).toHaveBeenCalledWith(expect.objectContaining({
+      select: { id: true }, where: expect.objectContaining({ createdAt: expect.objectContaining({ gt: readAt }) }),
+    }));
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });
 

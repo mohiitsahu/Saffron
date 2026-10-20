@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { CheckCircleIcon } from "@/components/Icons";
 import ChefForm from "@/components/ChefForm";
@@ -18,7 +17,7 @@ const tips = [
 ];
 
 export default async function CookWithUsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   if (!session?.user) {
     redirect("/signin?callbackUrl=/cook-with-us");
   }

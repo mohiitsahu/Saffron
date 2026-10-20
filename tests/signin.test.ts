@@ -4,6 +4,8 @@ import { safeSignInCallback } from "@/lib/signin";
 vi.mock("next-auth", () => ({ getServerSession: async () => ({ user: { id: "signed-in" } }) }));
 vi.mock("next-auth/react", () => ({ signIn: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
+// This page is invoked directly, outside Next's React server-render dispatcher.
+vi.mock("@/lib/session", () => ({ getAppSession: async () => ({ user: { id: "signed-in" } }) }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw Object.assign(new Error("Redirect"), { url }); } }));
 import SignInPage from "@/app/signin/page";
 

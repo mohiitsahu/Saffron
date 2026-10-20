@@ -35,7 +35,8 @@ import { getBookingsFor } from "@/lib/bookings";
 import { PATCH as editAccount } from "@/app/api/account/route";
 import { POST as deletionRequest } from "@/app/api/account/deletion-request/route";
 import { POST as contactSupport } from "@/app/api/support/route";
-import { GET as notifications, PATCH as readNotifications } from "@/app/api/notifications/route";
+import { GET as getNotifications, PATCH as readNotifications } from "@/app/api/notifications/route";
+import { getBookingFor } from "@/lib/bookings";
 
 context.session = new AsyncLocalStorage<string>();
 const DAY = 86_400_000;
@@ -43,6 +44,7 @@ const eventDate = new Date(Date.now() + 7 * DAY);
 const day = istDayKey(eventDate);
 const eventInput = new Date(eventDate.getTime() + 5.5 * 3_600_000).toISOString().slice(0, 16);
 const asUser = <T>(userId: string, callback: () => T) => context.session!.run(userId, callback);
+const notifications = () => getNotifications(new Request("http://localhost/api/notifications"));
 const json = (body: unknown, method = "POST") => new Request("http://localhost/api/test", {
   method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
 });
@@ -132,6 +134,24 @@ beforeEach(async () => {
 afterAll(() => prisma.$disconnect());
 
 describe("private booking notifications", () => {
+  it("loads only the selected booking and hides it from strangers", async () => {
+    const profile = await chef(); const customerId = await customer();
+    const booking = await seedBooking(customerId, profile.userId);
+    expect(await getBookingFor(customerId, booking.id)).toMatchObject({ id: booking.id, role: "customer" });
+    expect(await getBookingFor(profile.userId, booking.id)).toMatchObject({ id: booking.id, address: null });
+    expect(await getBookingFor(await customer(), booking.id)).toBeNull();
+  });
+
+  it("reports the unread dot without returning booking data", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED" } });
+    const summary = () => getNotifications(new Request("http://localhost/api/notifications?summary=1"));
+    expect(await (await asUser(customerId, summary)).json()).toEqual({ hasUnread: true });
+    expect(await (await asUser(profile.userId, summary)).json()).toEqual({ hasUnread: false });
+    const feed = await (await asUser(customerId, notifications)).json();
+    await asUser(customerId, () => readNotifications(json({ through: feed.through }, "PATCH")));
+    expect(await (await asUser(customerId, summary)).json()).toEqual({ hasUnread: false });
+  });
   it("only shows the other party's events and never exposes contact details", async () => {
     const profile = await chef(); const customerId = await customer();
     const booking = await seedBooking(customerId, profile.userId);

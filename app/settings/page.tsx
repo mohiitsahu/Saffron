@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { ACCOUNT_DELETION_REASON } from "@/lib/account";
 import AccountSettings from "@/components/AccountSettings";
@@ -13,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Account settings | Saffron", robots: { index: false, follow: false } };
 
 export default async function SettingsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   if (!session?.user) return <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
     <h1 className="text-3xl font-bold">Account settings</h1>
     <p className="mt-2 text-ink/70">Sign in to manage your account and bookings.</p>

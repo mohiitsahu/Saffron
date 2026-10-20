@@ -7,12 +7,21 @@ import { notificationCopy, notificationScope } from "@/lib/notifications";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Sign in to see notifications." }, { status: 401, headers });
   const userId = session.user.id;
   const through = new Date();
   const scope = { ...notificationScope(userId), createdAt: { lte: through } };
+  if (new URL(req.url).searchParams.get("summary") === "1") {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { notificationsReadAt: true } });
+    if (!user) return NextResponse.json({ error: "Account not found." }, { status: 401, headers });
+    // The dot only needs existence, not 30 joined bookings and an exact count.
+    const unread = await prisma.bookingEvent.findFirst({ where: { ...scope,
+      createdAt: { lte: through, ...(user.notificationsReadAt ? { gt: user.notificationsReadAt } : {}) },
+    }, select: { id: true } });
+    return NextResponse.json({ hasUnread: Boolean(unread) }, { headers });
+  }
   const data = await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId }, select: { notificationsReadAt: true } });
     if (!user) return null;

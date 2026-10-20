@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { countPendingRequests } from "@/lib/pendingRequests";
 import { formatINR, menuLines } from "@/lib/format";
@@ -17,7 +16,7 @@ import FormNotice from "@/components/FormNotice";
 export const dynamic = "force-dynamic";
 
 export default async function ChefIdCardPage({ searchParams }: { searchParams: { saved?: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   if (!session?.user) {
     redirect("/signin?callbackUrl=/chef");
   }

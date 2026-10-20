@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import SignInButton from "@/components/SignInButton";
 import { safeSignInCallback } from "@/lib/signin";
 
@@ -30,7 +29,7 @@ function one(value?: string | string[]) {
 export default async function SignInPage({ searchParams }: { searchParams: SearchParams }) {
   const callbackUrl = safeSignInCallback(searchParams.callbackUrl, process.env.NEXTAUTH_URL);
 
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   if (session?.user) redirect(callbackUrl);
 
   const errorCode = one(searchParams.error);

@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { bookingSelect, getBookingsFor, serializeBooking } from "@/lib/bookings";
-import { prisma } from "@/lib/prisma";
+import { getAppSession } from "@/lib/session";
+import { getBookingFor, getBookingsFor } from "@/lib/bookings";
 import BookingsView from "@/components/BookingsView";
 import { pageClass } from "@/lib/ui";
 
@@ -11,14 +9,15 @@ export const dynamic = "force-dynamic";
 type SearchParams = { tab?: string | string[]; booking?: string | string[] };
 
 export default async function MyBookingsPage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   if (!session?.user) {
     redirect("/signin?callbackUrl=/bookings");
   }
 
-  const { asCustomer, asChef } = await getBookingsFor(session.user.id);
   const target = typeof searchParams.booking === "string" && searchParams.booking.length <= 100 ? searchParams.booking : null;
-  const focused = target ? await prisma.booking.findFirst({ where: { id: target, OR: [{ customerId: session.user.id }, { chefId: session.user.id }] }, select: bookingSelect }) : null;
+  const focused = target ? await getBookingFor(session.user.id, target) : null;
+  // Opening one update must not fetch and serialize the entire booking history.
+  const { asCustomer, asChef } = focused ? { asCustomer: [], asChef: [] } : await getBookingsFor(session.user.id);
   const showChefTabs = session.user.isChef || asChef.length > 0;
   const tabParam = Array.isArray(searchParams.tab) ? searchParams.tab[0] : searchParams.tab;
 
@@ -30,7 +29,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: S
       <div className="mt-6">
         <BookingsView
           key={`${tabParam ?? "requests"}:${target ?? ""}`}
-          focusedBooking={focused ? serializeBooking(focused, session.user.id) : null}
+          focusedBooking={focused}
           asChef={asChef}
           asCustomer={asCustomer}
           showChefTabs={showChefTabs}

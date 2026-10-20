@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import Navbar, { NavbarFallback } from "@/components/Navbar";
 import NavigationHistory from "@/components/NavigationHistory";
 
 const heading = Bricolage_Grotesque({
@@ -37,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <Navbar />
+        <Suspense fallback={<NavbarFallback />}><Navbar /></Suspense>
         <main id="main" className="flex-1">
           {children}
         </main>

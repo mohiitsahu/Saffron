@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAppSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { formatDateTimeIST } from "@/lib/format";
 import { primaryButton } from "@/lib/ui";
@@ -19,7 +18,7 @@ const questions = [
 ];
 
 export default async function HelpPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   const requests = session?.user ? await prisma.report.findMany({ where: { reporterId: session.user.id, reason: { in: ["support", "privacy"] } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10, select: { id: true, details: true, reason: true, status: true, createdAt: true, resolutionNote: true } }) : [];
   return <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">
     <h1 className="text-3xl font-bold sm:text-4xl">Help and contact</h1><p className="mt-3 text-ink/75">Answers for your next meal, and a way to reach the Saffron administrator.</p>

@@ -216,6 +216,13 @@ export function resolveTransition(
   }
 }
 
+export async function getBookingFor(userId: string, bookingId: string): Promise<BookingView | null> {
+  const scope = { id: bookingId, OR: [{ customerId: userId }, { chefId: userId }] };
+  await settleStaleBookings(scope);
+  const booking = await prisma.booking.findFirst({ where: scope, select: bookingSelect });
+  return booking ? serializeBooking(booking, userId) : null;
+}
+
 export async function getBookingsFor(userId: string) {
   await settleStaleBookings({ OR: [{ customerId: userId }, { chefId: userId }] });
 

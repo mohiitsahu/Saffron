@@ -219,6 +219,9 @@ sheet. It reads existing BookingEvent records, excludes the viewer's own actions
 and shows the latest 30 updates. “Mark all as read” saves the current snapshot's
 time in User.notificationsReadAt without clearing later updates or other accounts.
 The bell refreshes every minute while visible and when returning to the tab.
+While closed it only queries whether an unread event exists; the full inbox is
+loaded on opening. Focus/visibility checks are coalesced, and inbox links disable
+automatic prefetch so opening the panel does not fetch multiple booking pages.
 No new migration is needed when the existing discovery/proposals migration has
 been applied. Links open the selected booking, including older history, after
 checking that the viewer is a party. Notifications never include booking addresses
