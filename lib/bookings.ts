@@ -219,19 +219,27 @@ export function resolveTransition(
 export async function getBookingsFor(userId: string) {
   await settleStaleBookings({ OR: [{ customerId: userId }, { chefId: userId }] });
 
-  const rows = await prisma.booking.findMany({
-    where: { OR: [{ customerId: userId }, { chefId: userId }] },
-    orderBy: { eventDate: "desc" },
-    take: 100,
-    select: bookingSelect,
-  });
+  const scope: Prisma.BookingWhereInput = { OR: [{ customerId: userId }, { chefId: userId }] };
+  const actionable: Prisma.BookingWhereInput = { OR: [
+    { status: { in: ["REQUESTED", "ACCEPTED"] } },
+    { customerId: userId, status: "COMPLETED", review: { is: null } },
+  ] };
+  // History has a bounded initial window; pending work must never share its cutoff.
+  // Both reads see the same snapshot, so a concurrent transition cannot duplicate a row.
+  const [activeRows, historyRows] = await prisma.$transaction(async (tx) => Promise.all([
+    tx.booking.findMany({ where: { AND: [scope, actionable] },
+      orderBy: [{ eventDate: "asc" }, { id: "asc" }], select: bookingSelect }),
+    tx.booking.findMany({ where: { AND: [scope, { NOT: actionable }] },
+      orderBy: [{ eventDate: "desc" }, { id: "desc" }], take: 100, select: bookingSelect }),
+  ]), { isolationLevel: "RepeatableRead" });
+  const rows = [...activeRows, ...historyRows];
 
   const views = rows.map((row) => serializeBooking(row, userId));
 
   // Active bookings first (soonest event first), then the rest (newest first).
   const isActive = (v: BookingView) => v.status === "REQUESTED" || v.status === "ACCEPTED";
   const active = views.filter(isActive).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-  const past = views.filter((v) => !isActive(v));
+  const past = views.filter((v) => !isActive(v)).sort((a, b) => b.eventDate.localeCompare(a.eventDate));
   const ordered = [...active, ...past];
 
   return {

@@ -15,6 +15,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!report) return 404;
     if (report.status !== "OPEN") return 409;
     const chefUserId = report.chefProfile?.userId ?? report.booking?.chefId;
+    if (action === "hide_profile" && !chefUserId) return 400;
     if (action === "hide_profile" && chefUserId) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chefUserId}))`;
     }
@@ -26,5 +27,5 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     await tx.adminAction.create({ data: { actorId: admin.user.id, targetId: report.id, action: `report_${action}`, note } });
     return 200;
   });
-  return NextResponse.json(result === 200 ? { ok: true } : { error: result === 404 ? "Report not found." : "This report was already handled. Refresh the page." }, { status: result });
+  return NextResponse.json(result === 200 ? { ok: true } : { error: result === 404 ? "Report not found." : result === 400 ? "This request has no chef profile to hide." : "This report was already handled. Refresh the page." }, { status: result });
 }

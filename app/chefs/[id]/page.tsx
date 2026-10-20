@@ -9,9 +9,11 @@ import { firstName, formatDateIST, formatINR, menuLines } from "@/lib/format";
 import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import BookingForm from "@/components/BookingForm";
 import Reveal from "@/components/Reveal";
-import { primaryButton } from "@/lib/ui";
+import { pageClass, primaryButton } from "@/lib/ui";
 import { bookingCreateSchema } from "@/lib/validation";
 import ReportForm from "@/components/ReportForm";
+import MealGallery from "@/components/MealGallery";
+import { mealPhotoOrder, mealPhotoSelect } from "@/lib/meals";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
   const selectedDate = bookingCreateSchema.shape.eventDate.safeParse(searchParams.eventDate);
   const selectedGuests = Number(searchParams.guests);
 
-  const [session, agg, reviews, completed, blocked] = await Promise.all([
+  const [session, agg, reviews, completed, blocked, mealPhotos] = await Promise.all([
     getServerSession(authOptions),
     prisma.review.aggregate({
       where: { chefId: chef.userId },
@@ -74,6 +76,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
       take: 200,
       select: { day: true },
     }),
+    prisma.mealPhoto.findMany({ where: { chefId: chef.id }, orderBy: [...mealPhotoOrder], select: mealPhotoSelect }),
   ]);
 
   const viewer = !session?.user ? "guest" : session.user.id === chef.userId ? "owner" : "customer";
@@ -100,7 +103,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
   const menu = menuLines(chef.sampleMenu);
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl px-4 py-8">
+    <div className={pageClass}>
       <Link
         href="/chefs"
         className="group inline-flex items-center gap-1 text-sm font-medium text-leaf underline underline-offset-4"
@@ -166,15 +169,16 @@ export default async function ChefProfilePage({ params, searchParams }: { params
               </li>
             ))}
           </ul>
-          <a href="#book" className={`${primaryButton} mt-4 lg:hidden`}>
+          <a href="#book" className={`${primaryButton} mt-4`}>
             Request this chef
           </a>
         </div>
       </header>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_28rem]">
-        <div className="space-y-8">
-          <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-leaf/25 bg-white/40 p-5 shadow-soft sm:grid-cols-4">
+      <div className="mt-8 space-y-8">
+        <div className="grid min-w-0 gap-8 lg:grid-cols-2">
+          {mealPhotos.length > 0 && <div className="min-w-0 lg:col-span-2"><MealGallery photos={mealPhotos} chefName={chef.displayName} /></div>}
+          <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-leaf/25 bg-white/40 p-5 shadow-soft sm:grid-cols-4 lg:col-span-2">
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-ink/60">Price</dt>
               <dd className="mt-0.5 font-bold">{formatINR(chef.pricePerPerson)} / guest</dd>
@@ -219,7 +223,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
           <Reveal>
           <section className="rounded-2xl border-2 border-dashed border-leaf/60 p-5">
             <h2 className="text-2xl font-bold">What to expect</h2>
-            <ol className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ol className="mt-4 grid gap-4 sm:grid-cols-2">
               {expect.map((step, i) => (
                 <li key={step} className="flex gap-3">
                   <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-forest font-heading text-sm font-bold text-saffron">
@@ -262,7 +266,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
           </Reveal>
         </div>
 
-        <aside className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4">
           <BookingForm
             initialEventDate={selectedDate.success ? searchParams.eventDate : ""}
             initialGuests={Number.isInteger(selectedGuests) && selectedGuests >= 1 && selectedGuests <= chef.maxGuests ? selectedGuests : undefined}
@@ -278,7 +282,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
 
           <div className="rounded-2xl bg-sage p-5 shadow-soft">
             <h2 className="font-bold">Booking safely</h2>
-            <ul className="mt-3 space-y-2.5 text-sm">
+            <ul className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
               <li className="flex gap-2.5">
                 <CheckCircleIcon className="mt-0.5 h-4 w-4 flex-none text-leaf" />
                 {chef.verified
@@ -299,7 +303,7 @@ export default async function ChefProfilePage({ params, searchParams }: { params
               </li>
             </ul>
           </div>
-        </aside>
+        </div>
       </div>
     </div>
   );

@@ -57,7 +57,7 @@ export default function ChefsHeader({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const state = useRef<State>(initial);
-  const lastUrl = useRef(toUrl(initial));
+  const lastUrl = useRef("");
   const priceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [sort, setSort] = useState(initial.sort);
@@ -115,39 +115,57 @@ export default function ChefsHeader({
         pending={isPending}
       />
 
-      <form className="mt-5 grid gap-3 rounded-xl border border-leaf/25 bg-sage/40 p-4 sm:grid-cols-[1fr_1fr_6rem_auto] sm:items-end"
+      <form aria-labelledby="availability-heading" className="mt-5 min-w-0 rounded-2xl border border-leaf/20 bg-white/50 p-4 sm:p-5"
         onSubmit={(e) => {
-          e.preventDefault(); const data = new FormData(e.currentTarget);
+          e.preventDefault();
+          const data = new FormData(e.currentTarget);
           push({ date: String(data.get("date") ?? ""), time: String(data.get("time") ?? ""), guests: String(data.get("guests") ?? "") });
         }}>
-        <div><label htmlFor="search-date" className={labelClass}>Meal date</label><input id="search-date" name="date" type="date" defaultValue={initial.date} className={`${inputClass} min-w-0`} /></div>
-        <div><label htmlFor="search-time" className={labelClass}>Time (IST, optional)</label><input id="search-time" name="time" type="time" defaultValue={initial.time} className={`${inputClass} min-w-0`} /></div>
-        <div><label htmlFor="search-guests" className={labelClass}>Guests</label><input id="search-guests" name="guests" type="number" min="1" max="100" defaultValue={initial.guests} className={inputClass} /></div>
-        <button className={outlineButton}>Check availability</button>
-        {(initial.date || initial.time || initial.guests) && <button type="button" onClick={() => push({ date: "", time: "", guests: "" })} className="min-h-11 text-sm text-leaf underline">Clear date and guests</button>}
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+          <div className="min-w-0">
+            <h2 id="availability-heading" className="text-base font-bold">Plan your meal</h2>
+            <p id="availability-hint" className="mt-1 text-sm text-ink/70">Add a date and guests to narrow your search. All times are in IST.</p>
+          </div>
+          {(initial.date || initial.time || initial.guests) && <button type="button" onClick={() => push({ date: "", time: "", guests: "" })} className="min-h-11 text-sm font-semibold text-leaf underline underline-offset-4">Clear meal details</button>}
+        </div>
+        <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] lg:items-end">
+          <div className="col-span-2 min-w-0 lg:col-span-1">
+            <label htmlFor="search-date" className={labelClass}>Meal date</label>
+            <input id="search-date" name="date" type="date" defaultValue={initial.date} aria-describedby="availability-hint" className={inputClass} />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="search-time" className={labelClass}>Time (optional)</label>
+            <input id="search-time" name="time" type="time" defaultValue={initial.time} aria-describedby="availability-hint" className={inputClass} />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="search-guests" className={labelClass}>Guests</label>
+            <input id="search-guests" name="guests" type="number" inputMode="numeric" placeholder="Any" min="1" max="100" defaultValue={initial.guests} className={inputClass} />
+          </div>
+          <button type="submit" disabled={isPending} className={`${outlineButton} col-span-2 min-w-0 lg:col-span-1 lg:min-h-[50px]`}>{isPending ? "Checking…" : "Check availability"}</button>
+        </div>
       </form>
 
-      <div className="mt-10">
+      <div className="mt-8 sm:mt-10">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-leaf">
           <FlameIcon className="h-4 w-4" />
           Meet your match
         </p>
 
-        <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-4xl font-bold sm:text-5xl">{title}</h1>
+        <div className="mt-2 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <h1 className="break-words text-3xl font-bold sm:text-4xl">{title}</h1>
             <p className="mt-2 text-ink/70">
               Thoughtful cooking. Your own kitchen. An evening that feels like yours.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-full min-w-0 items-center gap-2 xl:w-auto">
             <button
               type="button"
               aria-expanded={showFilters}
               aria-controls="filters-panel"
               onClick={() => setShowFilters((v) => !v)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-3 font-semibold hover:bg-sage"
+              className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-lg border border-leaf/30 px-3 text-sm font-semibold hover:bg-sage sm:text-base"
             >
               <FiltersIcon className="h-5 w-5" />
               Filters
@@ -166,7 +184,7 @@ export default function ChefsHeader({
                 setSort(e.target.value);
                 push({ sort: e.target.value });
               }}
-              className="min-h-[44px] rounded-md border border-leaf/40 bg-cream px-3 font-semibold"
+              className="min-h-[48px] w-full min-w-0 flex-1 rounded-lg border border-leaf/30 bg-white/60 px-3 text-base font-medium xl:w-auto"
             >
               {Object.entries(SORT_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -205,7 +223,7 @@ export default function ChefsHeader({
               </fieldset>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
               <div>
                 <label htmlFor="maxPrice" className={labelClass}>
                   Max price per person (₹)

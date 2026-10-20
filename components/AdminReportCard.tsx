@@ -11,13 +11,15 @@ export default function AdminReportCard({ report }: { report: { id: string; reas
       const data = await res.json(); if (!res.ok) throw Error(data.error); router.refresh();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
+  const accountRequest = ["account_deletion", "support", "privacy"].includes(report.reason);
   return <li className="rounded-xl border border-leaf/30 bg-white/50 p-4">
     <h3 className="font-bold">{report.target} · {report.reason.replaceAll("_", " ")}</h3><p className="mt-1 text-xs text-ink/65">{report.reporter} · {report.createdAt} · {report.status}</p>
     <p className="mt-3 whitespace-pre-wrap break-words text-sm">{report.details}</p>
     {report.resolutionNote && <p className="mt-2 text-sm">Resolution: {report.resolutionNote}</p>}
+    {report.reason === "account_deletion" && <p className="mt-3 text-sm text-ink/70">Review active bookings and any records to retain. Marking this reviewed does not delete the account. Explain the next steps to the owner; replies are visible in Settings.</p>}
     {report.status === "OPEN" && <form onSubmit={submit} className="mt-4 space-y-3">
-      <label className="block text-sm">Admin note<textarea name="note" required minLength={5} maxLength={1000} rows={2} className={inputClass} /></label>
-      <div className="flex flex-wrap gap-2"><button disabled={busy} value="resolve" className={primaryButton}>Resolve report</button><button disabled={busy} value="dismiss" className={outlineButton}>Dismiss report</button><button disabled={busy} value="hide_profile" className={dangerButton}>Resolve and hide chef</button></div>
+      <label className="block text-sm">{accountRequest ? "Reply for the account owner" : "Admin note"}<textarea name="note" required minLength={5} maxLength={1000} rows={2} className={inputClass} /></label>
+      <div className="flex flex-wrap gap-2"><button disabled={busy} value="resolve" className={primaryButton}>{report.reason === "account_deletion" ? "Mark request reviewed" : accountRequest ? "Reply and close" : "Resolve report"}</button><button disabled={busy} value="dismiss" className={outlineButton}>{accountRequest ? "Close request" : "Dismiss report"}</button>{!accountRequest && <button disabled={busy} value="hide_profile" className={dangerButton}>Resolve and hide chef</button>}</div>
     </form>}
     {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
   </li>;

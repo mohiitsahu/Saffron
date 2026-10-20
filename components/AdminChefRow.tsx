@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AdminMealPhotos from "@/components/AdminMealPhotos";
+import type { MealPhotoItem } from "@/lib/meals";
 import { dangerButton, outlineButton, primaryButton } from "@/lib/ui";
 
 export type AdminChef = {
@@ -19,6 +21,7 @@ export type AdminChef = {
   maxGuests: number;
   pricePerPerson: number;
   suspended: boolean;
+  mealPhotos: MealPhotoItem[];
 };
 
 export default function AdminChefRow({ chef }: { chef: AdminChef }) {
@@ -128,6 +131,7 @@ export default function AdminChefRow({ chef }: { chef: AdminChef }) {
       </div>
 
       <details className="mt-3 text-sm"><summary className="cursor-pointer font-semibold text-leaf">Review profile details</summary><p className="mt-2 whitespace-pre-wrap">{chef.bio}</p><p className="mt-2">₹{chef.pricePerPerson} per guest · up to {chef.maxGuests} guests</p><p className="mt-2 whitespace-pre-wrap">{chef.sampleMenu}</p>{chef.suspended && <p className="mt-2 text-danger">Hidden by an administrator. The chef cannot reactivate this listing.</p>}</details>
+      <AdminMealPhotos chefId={chef.id} photos={chef.mealPhotos} />
       <label className="mt-3 block text-sm">Admin note<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Reason for this change" className="mt-1 w-full rounded-lg border border-leaf/30 bg-cream p-3" /></label>
 
       {error && (

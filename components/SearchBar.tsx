@@ -30,7 +30,7 @@ function ClearButton({ label, onClick }: { label: string; onClick: () => void })
       aria-label={label}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-ink/70 hover:bg-sage hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf"
+      className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-ink/70 hover:bg-sage hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf"
     >
       <svg
         width="16"
@@ -234,12 +234,12 @@ export default function SearchBar({
   return (
     <form onSubmit={handleSubmit} role="search" aria-label="Find a chef">
       <div
-        className={`grid rounded-2xl border border-leaf/30 bg-cream text-ink ${
+        className={`grid min-w-0 rounded-2xl border border-leaf/30 bg-cream text-ink ${
           hero ? "shadow-lift" : "shadow-soft"
-        } md:grid-cols-[1fr_1fr_auto] md:items-center`}
+        } md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center`}
       >
         <div
-          className={`flex items-center gap-3 rounded-t-2xl border-b border-leaf/20 px-4 py-3 md:rounded-l-2xl md:rounded-tr-none md:border-b-0 md:border-r ${cellFocus}`}
+          className={`flex min-w-0 items-center gap-3 rounded-t-2xl border-b border-leaf/20 px-4 py-3 md:rounded-l-2xl md:rounded-tr-none md:border-b-0 md:border-r ${cellFocus}`}
         >
           <SearchIcon className="h-5 w-5 flex-none" />
           <div className="min-w-0 flex-1">
@@ -263,7 +263,7 @@ export default function SearchBar({
         </div>
 
         <div
-          className={`relative flex items-center gap-3 border-b border-leaf/20 px-4 py-3 md:border-b-0 ${cellFocus}`}
+          className={`relative flex min-w-0 items-center gap-3 border-b border-leaf/20 px-4 py-3 md:border-b-0 ${cellFocus}`}
         >
           <PinIcon className="h-5 w-5 flex-none" />
           <div className="min-w-0 flex-1">
@@ -349,7 +349,7 @@ export default function SearchBar({
           )}
         </div>
 
-        <button type="submit" className={`${accentButton} m-2 gap-2`}>
+        <button type="submit" className={`${accentButton} m-2 min-h-12 gap-2`}>
           <SearchIcon className="h-5 w-5" />
           Find my chef
         </button>
@@ -364,7 +364,7 @@ export default function SearchBar({
             key={label}
             type="button"
             onClick={() => pickPopular(label)}
-            className={`rounded-full border px-3 py-2 font-medium transition duration-200 active:scale-95 ${
+            className={`min-h-11 rounded-full border px-3 py-2 font-medium transition duration-200 active:scale-95 ${
               hero ? "border-white/40 hover:bg-white/15" : "border-leaf/30 hover:bg-sage"
             }`}
           >

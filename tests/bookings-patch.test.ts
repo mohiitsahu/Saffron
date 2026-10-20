@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   notify: vi.fn(),
   prisma: {
-    booking: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
+    booking: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     bookingEvent: { create: vi.fn() },
     chefBlockedDay: { findUnique: vi.fn() },
     chefProfile: { findUnique: vi.fn() },
@@ -39,11 +39,12 @@ function patch(action: string) {
 }
 
 function setBooking(status: string, eventDate: Date) {
-  const row = { id: "bk1", customerId: "cust1", chefId: "chef1", status, eventDate };
+  const row = { id: "bk1", customerId: "cust1", chefId: "chef1", status, eventDate, guests: 2, version: 0, proposedEventDate: null };
   const mail = { eventDate, guests: 2, area: "Arera", estimatedTotal: 1000, customer: {}, chef: {} };
-  // First lookup finds the booking, the second gathers the email details, the third is the response.
+  // Response data is read inside the transaction; only email details are read afterward.
   mocks.prisma.booking.findUnique.mockReset();
-  mocks.prisma.booking.findUnique.mockResolvedValueOnce(row).mockResolvedValueOnce(mail).mockResolvedValue({ id: "bk1" });
+  mocks.prisma.booking.findUnique.mockResolvedValueOnce(row).mockResolvedValueOnce(mail);
+  mocks.prisma.booking.findUniqueOrThrow.mockReset().mockResolvedValue({ id: "bk1", status: "updated" });
 }
 
 beforeEach(() => {
@@ -59,7 +60,7 @@ beforeEach(() => {
   );
   mocks.prisma.booking.findFirst.mockResolvedValue(null);
   mocks.prisma.chefBlockedDay.findUnique.mockResolvedValue(null);
-  mocks.prisma.chefProfile.findUnique.mockResolvedValue({ suspended: false });
+  mocks.prisma.chefProfile.findUnique.mockResolvedValue({ suspended: false, maxGuests: 10 });
   mocks.prisma.booking.updateMany.mockResolvedValue({ count: 1 });
 });
 
@@ -139,4 +140,48 @@ describe("PATCH /api/bookings/[id]: emails", () => {
     expect(res.status).toBe(409);
     expect(mocks.notify).not.toHaveBeenCalled();
   });
+  it("refuses acceptance when the chef lowered their capacity", async () => {
+    mocks.session.mockResolvedValue({ user: { id: "chef1" } });
+    setBooking("REQUESTED", future);
+    mocks.prisma.chefProfile.findUnique.mockResolvedValue({ suspended: false, maxGuests: 1 });
+    expect((await patch("accept")).status).toBe(409);
+    expect(mocks.prisma.booking.updateMany).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["accept", "REQUESTED", "chef1", future],
+    ["decline", "REQUESTED", "chef1", future],
+    ["cancel", "ACCEPTED", "cust1", future],
+    ["complete", "ACCEPTED", "chef1", past],
+  ] as const)("returns the committed booking if email preparation fails after %s", async (action, status, userId, eventDate) => {
+    mocks.session.mockResolvedValue({ user: { id: userId } });
+    setBooking(status, eventDate);
+    const row = { id: "bk1", customerId: "cust1", chefId: "chef1", status, eventDate, guests: 2, version: 0, proposedEventDate: null };
+    mocks.prisma.booking.findUnique.mockReset().mockResolvedValueOnce(row).mockRejectedValueOnce(new Error("Email lookup failed"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await patch(action);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ booking: { id: "bk1", status: "updated" } });
+      expect(mocks.prisma.bookingEvent.create).toHaveBeenCalledOnce();
+      expect(mocks.notify).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
+  });
+
+  it("preserves success when the notifier unexpectedly rejects", async () => {
+    mocks.session.mockResolvedValue({ user: { id: "chef1" } }); setBooking("REQUESTED", future);
+    mocks.notify.mockRejectedValueOnce(new Error("Notifier failed"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try { expect((await patch("accept")).status).toBe(200); }
+    finally { log.mockRestore(); }
+  });
+
+  it("fails within the transaction when response data cannot be prepared", async () => {
+    mocks.session.mockResolvedValue({ user: { id: "chef1" } }); setBooking("REQUESTED", future);
+    mocks.prisma.booking.findUniqueOrThrow.mockRejectedValueOnce(new Error("Response lookup failed"));
+    await expect(patch("accept")).rejects.toThrow("Response lookup failed");
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
 });

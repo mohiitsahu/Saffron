@@ -8,12 +8,15 @@ import { formatINR, menuLines } from "@/lib/format";
 import { CheckCircleIcon, PinIcon, StarIcon } from "@/components/Icons";
 import ShareProfile from "@/components/ShareProfile";
 import AvailabilityManager from "@/components/AvailabilityManager";
+import MealPhotoManager from "@/components/MealPhotoManager";
+import { mealPhotoOrder, mealPhotoSelect } from "@/lib/meals";
 import { todayIST } from "@/lib/availability";
-import { outlineButton, primaryButton } from "@/lib/ui";
+import { outlineButton, pageClass, primaryButton } from "@/lib/ui";
+import FormNotice from "@/components/FormNotice";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChefIdCardPage() {
+export default async function ChefIdCardPage({ searchParams }: { searchParams: { saved?: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     redirect("/signin?callbackUrl=/chef");
@@ -42,7 +45,7 @@ export default async function ChefIdCardPage() {
 
   if (!profile) redirect("/cook-with-us");
 
-  const [blocked, agg, completed, pending] = await Promise.all([
+  const [blocked, agg, completed, pending, mealPhotos] = await Promise.all([
     prisma.chefBlockedDay.findMany({
       where: { userId, day: { gte: todayIST() } },
       orderBy: { day: "asc" },
@@ -56,6 +59,7 @@ export default async function ChefIdCardPage() {
     }),
     prisma.booking.count({ where: { chefId: userId, status: "COMPLETED" } }),
     countPendingRequests(userId),
+    prisma.mealPhoto.findMany({ where: { chefId: profile.id }, orderBy: [...mealPhotoOrder], select: mealPhotoSelect }),
   ]);
 
   const avg = agg._avg.rating;
@@ -76,9 +80,10 @@ export default async function ChefIdCardPage() {
   const doneCount = checklist.filter((item) => item.done).length;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8">
-      <h1 className="text-3xl font-bold">Your chef profile</h1>
+    <div className={pageClass}>
+      <h1 className="text-3xl font-bold sm:text-4xl">Your chef profile</h1>
       <p className="mt-1 text-ink/70">This is how you appear on Saffron.</p>
+      {searchParams.saved === "1" && <div className="mt-4"><FormNotice>Your chef profile has been saved.</FormNotice></div>}
       {profile.suspended && <p role="status" className="mt-4 rounded-xl border border-danger/40 bg-danger/5 p-4 text-sm">An administrator has hidden your listing. You can edit your details, but an administrator must restore visibility.</p>}
 
       {pending > 0 && (
@@ -94,7 +99,8 @@ export default async function ChefIdCardPage() {
         </Link>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[min-content_1fr] lg:items-start">
+        <div className="min-w-0 lg:col-start-1 lg:row-start-1">
         <article className="animate-fade-up overflow-hidden rounded-2xl border-2 border-dashed border-leaf bg-cream shadow-soft">
           <header className="flex items-center justify-between gap-3 bg-gradient-to-r from-forest to-leaf px-5 py-3 text-white">
             <span className="font-heading text-lg font-extrabold tracking-wide text-saffron">SAFFRON</span>
@@ -192,11 +198,15 @@ export default async function ChefIdCardPage() {
             </p>
           </footer>
         </article>
+        </div>
 
-        <aside className="animate-fade-up space-y-4" style={{ animationDelay: "120ms" }}>
+        <aside className="min-w-0 animate-fade-up space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:grid lg:grid-rows-[auto_auto_1fr] lg:gap-4 lg:space-y-0 lg:self-stretch" style={{ animationDelay: "120ms" }}>
           <div className="flex flex-col gap-3 [&>*]:w-full">
             <Link href="/cook-with-us" className={primaryButton}>
               Edit profile
+            </Link>
+            <Link href="#meal-photos" className={outlineButton}>
+              Manage meal photos
             </Link>
             <Link href={`/chefs/${profile.id}`} className={outlineButton}>
               View public page
@@ -206,7 +216,7 @@ export default async function ChefIdCardPage() {
 
           <AvailabilityManager initialDays={blocked.map((b) => b.day)} today={todayIST()} />
 
-          <div className="rounded-2xl bg-sage p-5">
+          <div className="rounded-2xl bg-sage p-5 lg:self-end">
             <h2 className="font-bold">Make your profile stand out</h2>
             <p className="mt-1 text-sm text-ink/70">
               {doneCount} of {checklist.length} done
@@ -231,6 +241,9 @@ export default async function ChefIdCardPage() {
             </ul>
           </div>
         </aside>
+        <div className="min-w-0 lg:col-start-1 lg:row-start-2 lg:flex lg:self-stretch">
+          <MealPhotoManager initialPhotos={mealPhotos} />
+        </div>
       </div>
     </div>
   );

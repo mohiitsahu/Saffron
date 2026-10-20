@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { bookingDateLimits, formatINR } from "@/lib/format";
 import { inputClass, labelClass, outlineButton, primaryButton } from "@/lib/ui";
 import CancellationNote from "@/components/CancellationNote";
+import FormNotice from "@/components/FormNotice";
+import MobileBookingBar from "@/components/MobileBookingBar";
 
 type Props = {
   chefProfileId: string;
@@ -42,7 +44,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label htmlFor={htmlFor} className={labelClass}>
         {label}
       </label>
@@ -146,8 +148,8 @@ export default function BookingForm({
 
   if (viewer === "guest") {
     return (
-      <section id="book" className={ticketClass}>
-        <h2 className="text-xl font-bold">Request {chefName}</h2>
+      <><section id="book" className={ticketClass}>
+        <h2 id="book-heading" tabIndex={-1} className="text-xl font-bold">Request {chefName}</h2>
         <p className="mt-1 text-sm text-ink/80">
           Sign in with Google to send a request. You won&apos;t be charged, and your address stays private
           until the chef accepts.
@@ -158,7 +160,7 @@ export default function BookingForm({
         >
           Sign in to request
         </a>
-      </section>
+      </section><MobileBookingBar pricePerPerson={pricePerPerson} /></>
     );
   }
 
@@ -209,15 +211,15 @@ export default function BookingForm({
   }
 
   return (
-    <section id="book" aria-labelledby="book-heading" className={ticketClass}>
-      <h2 id="book-heading" className="text-xl font-bold">
+    <><section id="book" aria-labelledby="book-heading" className={ticketClass}>
+      <h2 id="book-heading" tabIndex={-1} className="text-xl font-bold">
         Request {chefName}
       </h2>
       <p className="mt-1 text-sm text-ink/80">
         A meal in your kitchen, for up to {maxGuests} guests.
       </p>
 
-      <form ref={formRef} onSubmit={onSubmit} noValidate className="mt-6 space-y-6">
+      <form ref={formRef} onSubmit={onSubmit} noValidate className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
         <fieldset className="min-w-0 space-y-4">
           <legend className="flex items-center gap-2.5 font-heading text-base font-bold">
             <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-leaf text-xs text-white">1</span>
@@ -288,7 +290,7 @@ export default function BookingForm({
         </Field>
         </fieldset>
 
-        <fieldset className="min-w-0 space-y-4 border-t border-leaf/20">
+        <fieldset className="min-w-0 space-y-4 border-t border-leaf/20 lg:border-l lg:border-t-0 lg:pl-6">
           <legend className="flex items-center gap-2.5 pr-3 font-heading text-base font-bold">
             <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-leaf text-xs text-white">2</span>
             Contact details
@@ -335,7 +337,7 @@ export default function BookingForm({
 
         </fieldset>
 
-        <div className="rounded-xl bg-sage/60 p-4">
+        <div className="rounded-xl bg-sage/60 p-4 lg:col-span-2">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Estimated total</p>
@@ -359,11 +361,9 @@ export default function BookingForm({
         </div>
 
         {message && (
-          <p role="alert" className="animate-fade-in font-medium text-danger">
-            {message}
-          </p>
+          <div className="lg:col-span-2"><FormNotice kind="error">{message}</FormNotice></div>
         )}
       </form>
-    </section>
+    </section><MobileBookingBar pricePerPerson={pricePerPerson} /></>
   );
 }

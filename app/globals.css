@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Keep the booking action out of the way while the phone menu is expanded. */
+body:has(#mobile-menu) [data-booking-bar] { display: none; }
+
 :root {
   color-scheme: light;
 }
@@ -26,6 +29,30 @@
   h4 {
     @apply font-heading;
     text-wrap: balance;
+  }
+
+  /* Keep native iOS date/time controls inside narrow form columns. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 3rem;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input::-webkit-date-and-time-value {
+    min-height: 1.5em;
+    text-align: left;
+  }
+
+  input::-webkit-datetime-edit {
+    min-width: 0;
+    padding: 0;
   }
 
   ::selection {

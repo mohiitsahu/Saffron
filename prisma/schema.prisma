@@ -106,6 +106,7 @@ model ChefProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   reports Report[]
+  mealPhotos MealPhoto[]
 
   @@index([city, active])
 }
@@ -210,6 +211,7 @@ model Report {
   @@unique([reporterId, bookingId])
   @@unique([reporterId, chefProfileId])
   @@index([status, createdAt])
+  @@index([reporterId, reason, createdAt])
 }
 
 model AdminAction {
@@ -220,4 +222,18 @@ model AdminAction {
   note String @db.Text
   createdAt DateTime @default(now())
   @@index([createdAt])
+}
+
+// Meal images are separate from the chef portrait and selected without bytes on pages.
+model MealPhoto {
+  id String @id @default(cuid())
+  chefId String
+  contentType String
+  data Bytes
+  dishName String @default("")
+  caption String @default("")
+  position Int
+  createdAt DateTime @default(now())
+  chef ChefProfile @relation(fields: [chefId], references: [id], onDelete: Cascade)
+  @@index([chefId, position, createdAt])
 }

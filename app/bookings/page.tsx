@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getBookingsFor } from "@/lib/bookings";
 import BookingsView from "@/components/BookingsView";
+import { pageClass } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,8 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: S
   const tabParam = Array.isArray(searchParams.tab) ? searchParams.tab[0] : searchParams.tab;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-12">
-      <h1 className="text-3xl font-bold">My bookings</h1>
+    <div className={pageClass}>
+      <h1 className="text-3xl font-bold sm:text-4xl">My bookings</h1>
       <p className="mt-1 text-ink/70">Track your requests and bookings in one place.</p>
 
       <div className="mt-6">

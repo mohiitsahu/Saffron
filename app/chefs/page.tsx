@@ -12,8 +12,9 @@ import {
   getRatingMap,
 } from "@/lib/chefs";
 import { cityVariants, findCity } from "@/lib/cities";
-import { outlineButton } from "@/lib/ui";
+import { outlineButton, pageClass } from "@/lib/ui";
 import { discoveryFilter } from "@/lib/discovery";
+import { chefPageUrl, paginate } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ const SORTS = ["recommended", "price_asc", "price_desc", "rating", "experience"]
 type Sort = (typeof SORTS)[number];
 
 type SearchParams = {
+  page?: string | string[];
   q?: string | string[];
   city?: string | string[];
   sort?: string | string[];
@@ -68,8 +70,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
   const [rows, chefCities, cuisineOptions] = await Promise.all([
     prisma.chefProfile.findMany({
       where,
-      orderBy: [{ verified: "desc" }, { createdAt: "desc" }],
-      take: 200,
+      orderBy: [{ verified: "desc" }, { createdAt: "desc" }, { id: "asc" }],
       select: chefListSelect,
     }),
     getChefCities(),
@@ -88,7 +89,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
     : rows;
 
   const matchedIds = matched.map((c) => c.userId);
-  const [ratings, completed] = await Promise.all([getRatingMap(matchedIds), getCompletedMap(matchedIds)]);
+  const ratings = await getRatingMap(matchedIds);
   const avgOf = (userId: string) => ratings.get(userId)?.avg ?? 0;
   const countOf = (userId: string) => ratings.get(userId)?.count ?? 0;
 
@@ -108,13 +109,18 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
     }
   });
 
-  const visible = sorted.slice(0, 40);
+  const pagination = paginate(sorted, one(searchParams.page));
+  const visible = pagination.items;
+  const completed = await getCompletedMap(visible.map((chef) => chef.userId));
+  const pageUrl = (page: number) => chefPageUrl({ q, city, sort: sort === "recommended" ? "" : sort,
+    maxPrice: maxPrice ? String(maxPrice) : "", verified: verifiedOnly ? "1" : "",
+    cuisine: cuisineFilter.join(","), date, time, guests }, page);
   const title = city ? `The chefs of ${findCity(city)?.name ?? city}` : "Chefs on Saffron";
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl px-4 py-8">
+    <div className={pageClass}>
       <ChefsHeader
-        key={[date, time, guests].join("|")}
+        key={[date, time, guests, pagination.page].join("|")}
         initial={{
           q,
           city,
@@ -131,7 +137,7 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
       {availability.error && <p role="alert" className="mt-4 text-danger">{availability.error}</p>}
       {date && !availability.error && <p className="mt-4 text-sm text-ink/70">Availability is checked in IST. {time ? "Chefs have at least 4 hours between bookings." : "Choose a time to include chefs with other bookings that day."} A request still needs the chef&apos;s confirmation.</p>}
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-b border-leaf/20 pb-4 text-sm">
+      <div id="chef-results" className="mt-8 flex scroll-mt-24 flex-wrap items-center justify-between gap-2 border-b border-leaf/20 pb-4 text-sm">
         <p>
           <span className="font-bold">
             {sorted.length} {sorted.length === 1 ? "chef" : "chefs"}
@@ -140,10 +146,11 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
         </p>
         <p className="flex items-center gap-1.5 text-ink/70">
           <CheckCircleIcon className="h-4 w-4 text-leaf" />
-          Verified chefs are listed first
+          {sort === "recommended" ? "Verified chefs are listed first" : "Your chosen sort applies to all results"}
         </p>
       </div>
 
+      {visible.length > 0 && <p className="mt-4 text-sm text-ink/65">Showing {pagination.start + 1}–{pagination.start + visible.length} of {sorted.length} chefs</p>}
       {availability.error || visible.length === 0 ? (
         <div className="mt-6 animate-scale-in rounded-2xl border-2 border-dashed border-leaf/50 bg-sage/70 p-8 text-center shadow-soft">
           <h2 className="text-xl font-bold">No chefs match yet</h2>
@@ -176,6 +183,11 @@ export default async function FindChefPage({ searchParams }: { searchParams: Sea
           ))}
         </div>
       )}
+      {!availability.error && pagination.pageCount > 1 && <nav aria-label="Chef search pages" className="mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-leaf/20 pt-6">
+        {pagination.page > 1 ? <Link href={pageUrl(pagination.page - 1)} className={outlineButton}>Previous chefs</Link> : <span aria-disabled="true" className={`${outlineButton} opacity-40`}>Previous chefs</span>}
+        <span aria-current="page" className="px-2 text-sm font-semibold">Page {pagination.page} of {pagination.pageCount}</span>
+        {pagination.page < pagination.pageCount ? <Link href={pageUrl(pagination.page + 1)} className={outlineButton}>Next chefs</Link> : <span aria-disabled="true" className={`${outlineButton} opacity-40`}>Next chefs</span>}
+      </nav>}
     </div>
   );
 }

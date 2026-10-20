@@ -18,6 +18,9 @@ export default async function Navbar() {
       : { href: "/cook-with-us", label: "Cook with us" },
   ];
   if (user) links.push({ href: "/bookings", label: "My bookings" });
+  links.push(user
+    ? { href: "/settings", label: "Settings" }
+    : { href: "/signin?callbackUrl=/settings", label: "Sign in" });
   if (isAdmin) links.push({ href: "/admin", label: "Admin" });
 
   return (
@@ -36,11 +39,7 @@ export default async function Navbar() {
         />
         Saffron
       </Link>
-      <NavMenu
-        links={links}
-        signedIn={Boolean(user)}
-        name={user?.name ?? user?.email ?? ""}
-      />
+      <NavMenu links={links} />
     </NavShell>
   );
 }

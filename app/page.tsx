@@ -66,7 +66,7 @@ export default async function Home() {
           />
         </div>
 
-        <div className="relative mx-auto w-full max-w-screen-2xl px-4 py-14 text-center sm:py-20">
+        <div className="relative w-full px-4 pb-14 pt-24 text-center sm:px-6 sm:py-20 lg:px-8">
           <p className="animate-fade-up text-xs font-semibold uppercase tracking-widest text-saffron">
             Private chefs for your home
           </p>
@@ -77,7 +77,7 @@ export default async function Home() {
             A chef in your kitchen. <span className="text-saffron">A table you can trust.</span>
           </h1>
           <p style={delay(160)} className="mx-auto mt-4 max-w-2xl animate-fade-up text-lg text-cream/90">
-            Book a verified home chef for a family dinner, a birthday or a house party. Your address
+            Find a home chef for a family dinner, a birthday or a house party. Look for the verified badge to see whose ID Saffron has checked. Your address
             stays private until the chef accepts, and you pay after the meal.
           </p>
 
@@ -91,7 +91,7 @@ export default async function Home() {
           >
             <li className="flex items-center gap-2">
               <CheckCircleIcon className="h-4 w-4 text-saffron" />
-              Verified chefs, ID checked
+              Verified badge means ID checked
             </li>
             <li className="flex items-center gap-2">
               <CheckCircleIcon className="h-4 w-4 text-saffron" />
@@ -105,7 +105,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-screen-2xl px-4 py-10 sm:py-14">
+      <section className="w-full px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-3xl font-bold">Featured chefs</h2>
@@ -158,7 +158,7 @@ export default async function Home() {
       </section>
 
       <section className="bg-sage">
-        <div className="mx-auto w-full max-w-screen-2xl px-4 py-10 sm:py-14">
+        <div className="w-full px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
           <Reveal>
             <h2 className="text-3xl font-bold">How it works</h2>
           </Reveal>
@@ -181,7 +181,7 @@ export default async function Home() {
       </section>
 
       {chefs.length >= FEATURED && (
-        <section className="mx-auto w-full max-w-screen-2xl px-4 py-10 sm:py-14">
+        <section className="w-full px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
           <Reveal>
           <div className="flex flex-col items-start justify-between gap-4 rounded-2xl bg-gradient-to-r from-leaf to-forest p-8 text-white shadow-lift sm:flex-row sm:items-center">
             <div>

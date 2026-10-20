@@ -71,14 +71,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }, { maxWait: 10_000, timeout: 15_000 });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
   if (input.action === "propose" || input.action === "accept") {
-    const mail = await prisma.booking.findUnique({ where: { id: params.id }, select: {
-      eventDate: true, proposedEventDate: true, guests: true, area: true, estimatedTotal: true,
-      customer: { select: { name: true, email: true } },
-      chef: { select: { name: true, email: true, chefProfile: { select: { displayName: true } } } },
-    } });
-    if (mail) await notifyBooking(input.action === "propose" ? "rescheduled" : "proposalAccepted", {
-      ...mail, eventDate: mail.proposedEventDate ?? mail.eventDate,
-    });
+    try {
+      const mail = await prisma.booking.findUnique({ where: { id: params.id }, select: {
+        eventDate: true, proposedEventDate: true, guests: true, area: true, estimatedTotal: true,
+        customer: { select: { name: true, email: true } },
+        chef: { select: { name: true, email: true, chefProfile: { select: { displayName: true } } } },
+      } });
+      if (mail) await notifyBooking(input.action === "propose" ? "rescheduled" : "proposalAccepted", {
+        ...mail, eventDate: mail.proposedEventDate ?? mail.eventDate,
+      });
+    } catch {
+      console.error("Booking time email could not be prepared.");
+    }
   }
   return NextResponse.json({ booking: serializeBooking(result.booking, userId) });
 }

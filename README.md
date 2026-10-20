@@ -10,7 +10,8 @@ Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Prisma + PostgreSQ
 ## Features
 
 - Find chefs by city, cuisine, dish and budget, with ratings and verified badges
-- Chef profiles with photo upload, sample menu and reviews
+- Chef profiles with a separate portrait, sample menu, reviews and up to six meal photos with dish names/captions
+- Meal gallery uses six compact photo slots with multi-image selection, browser compression, drag/keyboard rearrangement and a popup editor; admins can remove photos with an audit note
 - Booking requests: accept, decline, cancel and complete, with the customer's address and the
   chef's phone number revealed only after the chef accepts
 - Requests that nobody answers expire on their own; accepted bookings close themselves
@@ -24,6 +25,11 @@ Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Prisma + PostgreSQ
 - Chef time suggestions that customers accept or decline before a request becomes a confirmed booking
 - Cancellation guidance at `/cancellation`, with reporting from bookings and chef profiles
 - Admin review filters, report resolution notes, moderation history, and protected profile suspensions
+
+- Chef search pages with 12 results per page; filters and sorting carry across pages
+- Account settings for name and phone, with deletion requests reviewed in the admin queue
+- Help/FAQ page with private support and privacy messages and visible admin replies
+- Privacy and terms pages, plus loading, retry and missing-page screens
 
 ## Getting started
 

@@ -1,291 +1,92 @@
 "use client";
-
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CUISINE_OPTIONS, MAX_CUISINES } from "@/lib/cuisines";
-import { inputClass, labelClass, primaryButton } from "@/lib/ui";
+import { dangerButton, inputClass, labelClass, outlineButton, panelClass, primaryButton } from "@/lib/ui";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import PhotoUpload from "@/components/PhotoUpload";
+import FormNotice from "@/components/FormNotice";
 
 export type ChefFormValues = {
-  displayName: string;
-  bio: string;
-  city: string;
-  cuisines: string; // comma separated; the form splits it into chips and an "other" box
-  pricePerPerson: string;
-  maxGuests: string;
-  yearsExperience: string;
-  phone: string;
-  photoUrl: string;
-  sampleMenu: string;
-  active: boolean;
+  displayName: string; bio: string; city: string; cuisines: string;
+  pricePerPerson: string; maxGuests: string; yearsExperience: string;
+  phone: string; photoUrl: string; sampleMenu: string; active: boolean;
 };
+const splitCuisines = (text: string) => text.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
 
-const PRESETS: readonly string[] = CUISINE_OPTIONS;
-
-function splitCuisines(text: string) {
-  return text
-    .split(",")
-    .map((c) => c.trim().toLowerCase())
-    .filter(Boolean);
+function ProfileSection({ id, title, hint, children }: { id: string; title: string; hint: string; children: ReactNode }) {
+  return <section id={id} aria-labelledby={`${id}-heading`} className={`${panelClass} scroll-mt-24 space-y-5`}>
+    <div><h2 id={`${id}-heading`} className="text-xl font-bold">{title}</h2><p className="mt-1 text-sm text-ink/70">{hint}</p></div>{children}
+  </section>;
 }
 
-function Field({
-  label,
-  htmlFor,
-  error,
-  hint,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  error?: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label htmlFor={htmlFor} className={labelClass}>
-        {label}
-      </label>
-      {children}
-      {hint && !error && <p className="mt-1 text-xs text-ink/70">{hint}</p>}
-      {error && (
-        <p className="mt-1 animate-fade-in text-sm font-medium text-danger" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-export default function ChefForm({
-  initial,
-  isExisting,
-}: {
-  initial: ChefFormValues;
-  isExisting: boolean;
-}) {
+export default function ChefForm({ initial, isExisting }: { initial: ChefFormValues; isExisting: boolean }) {
   const router = useRouter();
-  const [values, setValues] = useState<ChefFormValues>(initial);
-  const [selected, setSelected] = useState<string[]>(() =>
-    splitCuisines(initial.cuisines).filter((c) => PRESETS.includes(c))
-  );
-  const [custom, setCustom] = useState(() =>
-    splitCuisines(initial.cuisines)
-      .filter((c) => !PRESETS.includes(c))
-      .join(", ")
-  );
+  const form = useRef<HTMLFormElement>(null);
+  const leaveDialog = useRef<HTMLDialogElement>(null);
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  const [values, setValues] = useState(initial);
+  const [selected, setSelected] = useState(() => splitCuisines(initial.cuisines).filter((item) => (CUISINE_OPTIONS as readonly string[]).includes(item)));
+  const [custom, setCustom] = useState(() => splitCuisines(initial.cuisines).filter((item) => !(CUISINE_OPTIONS as readonly string[]).includes(item)).join(", "));
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-
+  const [saved, setSaved] = useState(false);
   const customList = splitCuisines(custom);
-  const totalCuisines = selected.length + customList.length;
+  const cuisines = [...selected, ...customList];
+  const totalCuisines = cuisines.length;
+  const normalise = (items: string[]) => [...items].sort().join(",");
+  const dirty = !saved && (Object.entries(values).some(([key, value]) => key !== "cuisines" && value !== initial[key as keyof ChefFormValues]) || normalise(cuisines) !== normalise(splitCuisines(initial.cuisines)));
+  const navigation = useUnsavedChanges(dirty);
+  useEffect(() => {
+    if (navigation.pendingHref && !leaveDialog.current?.open) { leaveDialog.current?.showModal(); keepEditing.current?.focus(); }
+    if (!navigation.pendingHref && leaveDialog.current?.open) leaveDialog.current.close();
+  }, [navigation.pendingHref]);
+  useEffect(() => { if (Object.keys(errors).length) form.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-cuisine-error="true"] button')?.focus(); }, [errors]);
+  function set<K extends keyof ChefFormValues>(key: K, value: ChefFormValues[K]) { setSaved(false); setValues((current) => ({ ...current, [key]: value })); }
 
-  function set<K extends keyof ChefFormValues>(key: K, value: ChefFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
-
-  function toggleCuisine(name: string) {
-    setSelected((list) => (list.includes(name) ? list.filter((c) => c !== name) : [...list, name]));
-  }
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSaving(true);
-    setErrors({});
-    setMessage(null);
-
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setErrors({}); setMessage("");
     try {
-      const res = await fetch("/api/chef", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...values,
-          cuisines: [...selected, ...customList],
-          pricePerPerson: Number(values.pricePerPerson),
-          maxGuests: Number(values.maxGuests),
-          yearsExperience: Number(values.yearsExperience),
-        }),
-      });
+      const res = await fetch("/api/chef", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...values, cuisines, pricePerPerson: Number(values.pricePerPerson), maxGuests: Number(values.maxGuests), yearsExperience: Number(values.yearsExperience) }) });
       const data = await res.json();
-
-      if (!res.ok) {
-        setErrors(data.fieldErrors ?? {});
-        setMessage({ type: "error", text: data.error ?? "Could not save your profile. Try again." });
-        return;
-      }
-
-      setMessage({ type: "ok", text: "Profile saved." });
-      router.push("/chef");
-      router.refresh();
-    } catch {
-      setMessage({ type: "error", text: "Network problem. Check your connection and try again." });
-    } finally {
-      setSaving(false);
-    }
+      if (!res.ok) { setErrors(data.fieldErrors ?? {}); setMessage(data.error ?? "Could not save your profile. Try again."); return; }
+      setSaved(true); router.push("/chef?saved=1"); router.refresh();
+    } catch { setMessage("Network problem. Check your connection and try again."); }
+    finally { setSaving(false); }
+  }
+  function field(key: Exclude<keyof ChefFormValues, "active" | "cuisines">, label: string, options: { hint?: string; type?: string; rows?: number; autoComplete?: string } = {}) {
+    const props = { id: key, name: key, value: values[key], disabled: saving, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(key, event.target.value), className: inputClass, "aria-invalid": Boolean(errors[key]), "aria-describedby": errors[key] || options.hint ? `${key}-help` : undefined };
+    return <div className="min-w-0"><label htmlFor={key} className={labelClass}>{label}</label>{options.rows ? <textarea {...props} rows={options.rows} /> : <input {...props} type={options.type ?? "text"} inputMode={options.type === "number" ? "numeric" : options.type === "tel" ? "tel" : undefined} autoComplete={options.autoComplete} />}{(errors[key] || options.hint) && <p id={`${key}-help`} className={`mt-1 text-xs ${errors[key] ? "text-danger" : "text-ink/70"}`}>{errors[key] ?? options.hint}</p>}</div>;
   }
 
-  return (
-    <form onSubmit={onSubmit} className="mt-6 space-y-5" noValidate>
-      <Field label="Chef name" htmlFor="displayName" error={errors.displayName}>
-        <input
-          id="displayName"
-          className={inputClass}
-          value={values.displayName}
-          onChange={(e) => set("displayName", e.target.value)}
-        />
-      </Field>
-
-      <Field label="City" htmlFor="city" error={errors.city} hint="For example: Bhopal">
-        <input id="city" className={inputClass} value={values.city} onChange={(e) => set("city", e.target.value)} />
-      </Field>
-
-      <fieldset>
-        <legend className={labelClass}>Cuisines</legend>
-        <p className="mb-2 text-xs text-ink/70">
-          Tap everything you cook. {totalCuisines} of {MAX_CUISINES} chosen.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {CUISINE_OPTIONS.map((name) => {
-            const on = selected.includes(name);
-            const locked = !on && totalCuisines >= MAX_CUISINES;
-            return (
-              <button
-                key={name}
-                type="button"
-                aria-pressed={on}
-                disabled={locked}
-                onClick={() => toggleCuisine(name)}
-                className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-medium capitalize transition duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
-                  on ? "border-leaf bg-leaf text-white" : "border-leaf/40 hover:bg-sage"
-                }`}
-              >
-                {on && "✓ "}
-                {name}
-              </button>
-            );
-          })}
-        </div>
-        {errors.cuisines && (
-          <p className="mt-2 text-sm font-medium text-danger" role="alert">
-            {errors.cuisines}
-          </p>
-        )}
-      </fieldset>
-
-      <Field
-        label="Other cuisines (optional)"
-        htmlFor="customCuisines"
-        hint="Not in the list? Add your own, separated by commas."
-      >
-        <input
-          id="customCuisines"
-          className={inputClass}
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-        />
-      </Field>
-
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <Field label="Price per person (₹)" htmlFor="pricePerPerson" error={errors.pricePerPerson}>
-          <input
-            id="pricePerPerson"
-            type="number"
-            inputMode="numeric"
-            className={inputClass}
-            value={values.pricePerPerson}
-            onChange={(e) => set("pricePerPerson", e.target.value)}
-          />
-        </Field>
-        <Field
-          label="Maximum guests you can cook for"
-          htmlFor="maxGuests"
-          error={errors.maxGuests}
-          hint="The most guests in one booking."
-        >
-          <input
-            id="maxGuests"
-            type="number"
-            inputMode="numeric"
-            className={inputClass}
-            value={values.maxGuests}
-            onChange={(e) => set("maxGuests", e.target.value)}
-          />
-        </Field>
-        <Field label="Years of experience" htmlFor="yearsExperience" error={errors.yearsExperience}>
-          <input
-            id="yearsExperience"
-            type="number"
-            inputMode="numeric"
-            className={inputClass}
-            value={values.yearsExperience}
-            onChange={(e) => set("yearsExperience", e.target.value)}
-          />
-        </Field>
-      </div>
-
-      <Field label="Bio" htmlFor="bio" error={errors.bio} hint="Tell customers about your cooking and style.">
-        <textarea id="bio" rows={5} className={inputClass} value={values.bio} onChange={(e) => set("bio", e.target.value)} />
-      </Field>
-
-      <Field label="Sample menu" htmlFor="sampleMenu" error={errors.sampleMenu} hint="One dish per line.">
-        <textarea
-          id="sampleMenu"
-          rows={5}
-          className={inputClass}
-          value={values.sampleMenu}
-          onChange={(e) => set("sampleMenu", e.target.value)}
-        />
-      </Field>
-
-      <Field
-        label="Phone number"
-        htmlFor="phone"
-        error={errors.phone}
-        hint="Shared with a customer only after you accept their booking."
-      >
-        <input
-          id="phone"
-          type="tel"
-          inputMode="tel"
-          className={inputClass}
-          value={values.phone}
-          onChange={(e) => set("phone", e.target.value)}
-        />
-      </Field>
-
-      <PhotoUpload
-        value={values.photoUrl}
-        onChange={(url) => set("photoUrl", url)}
-        name={values.displayName}
-        error={errors.photoUrl}
-      />
-
-      {isExisting && (
-        <label className="flex min-h-[44px] items-center gap-3 text-base">
-          <input
-            type="checkbox"
-            className="h-5 w-5 accent-leaf"
-            checked={values.active}
-            onChange={(e) => set("active", e.target.checked)}
-          />
-          Accepting new booking requests
-        </label>
-      )}
-
-      {message && (
-        <p
-          role="alert"
-          className={`animate-scale-in ${message.type === "ok" ? "font-medium text-leaf" : "font-medium text-danger"}`}
-        >
-          {message.text}
-        </p>
-      )}
-
-      <button type="submit" disabled={saving} className={`${primaryButton} w-full`}>
-        {saving ? "Saving..." : isExisting ? "Save changes" : "Create chef profile"}
-      </button>
-    </form>
-  );
+  return <form ref={form} onSubmit={onSubmit} noValidate className="mt-6 space-y-6">
+    <nav aria-label="Profile sections" className="flex flex-wrap gap-2 text-sm font-semibold text-leaf">{[["about-you", "1. About you"], ["your-cooking", "2. Cooking"], ["your-pricing", "3. Pricing"]].map(([id, label]) => <a key={id} href={`#${id}`} className="inline-flex min-h-11 items-center rounded-full border border-leaf/25 bg-white/40 px-4 hover:bg-sage">{label}</a>)}</nav>
+    <ProfileSection id="about-you" title="About you" hint="Introduce yourself and help customers get to know their chef.">
+      <div className="grid gap-5 sm:grid-cols-2">{field("displayName", "Chef name", { autoComplete: "name" })}{field("city", "City", { hint: "For example: Bhopal", autoComplete: "address-level2" })}</div>
+      {field("bio", "Bio", { rows: 4, hint: "Tell customers about your cooking and style." })}
+      <div className="grid gap-5 sm:grid-cols-2">{field("yearsExperience", "Years of experience", { type: "number" })}{field("phone", "Phone number", { type: "tel", autoComplete: "tel-national", hint: "Shared only after you accept a booking." })}</div>
+      <PhotoUpload value={values.photoUrl} onChange={(url) => set("photoUrl", url)} name={values.displayName} error={errors.photoUrl} />
+    </ProfileSection>
+    <ProfileSection id="your-cooking" title="Your cooking" hint="Show the cuisines and dishes customers can request.">
+      <fieldset disabled={saving} data-cuisine-error={Boolean(errors.cuisines)} aria-describedby={errors.cuisines ? "cuisines-help cuisines-error" : "cuisines-help"} className="min-w-0"><legend className={labelClass}>Cuisines</legend><p id="cuisines-help" className="mb-3 text-xs text-ink/70">Choose up to {MAX_CUISINES}. {totalCuisines} selected.</p><div className="flex flex-wrap gap-2">{CUISINE_OPTIONS.map((name) => {
+        const on = selected.includes(name);
+        return <button key={name} type="button" aria-pressed={on} aria-describedby={errors.cuisines ? "cuisines-error" : "cuisines-help"} disabled={!on && totalCuisines >= MAX_CUISINES} onClick={() => { setSaved(false); setSelected((current) => on ? current.filter((item) => item !== name) : [...current, name]); }} className={`min-h-11 rounded-full border px-4 py-2 text-sm font-medium capitalize disabled:opacity-40 ${on ? "border-leaf bg-leaf text-white" : "border-leaf/40 hover:bg-sage"}`}>{on && "✓ "}{name}</button>;
+      })}</div>{errors.cuisines && <p id="cuisines-error" className="mt-2 text-sm text-danger">{errors.cuisines}</p>}</fieldset>
+      <div><label htmlFor="customCuisines" className={labelClass}>Other cuisines (optional)</label><input id="customCuisines" disabled={saving} value={custom} onChange={(event) => { setSaved(false); setCustom(event.target.value); }} className={inputClass} aria-describedby="custom-cuisines-help" /><p id="custom-cuisines-help" className="mt-1 text-xs text-ink/70">Add cuisines separated by commas.</p></div>
+      {field("sampleMenu", "Sample menu", { rows: 4, hint: "One dish per line. Start with 3 to 6 signature dishes." })}
+    </ProfileSection>
+    <ProfileSection id="your-pricing" title="Pricing and availability" hint="Set a price and guest count you are comfortable with.">
+      <div className="grid gap-5 sm:grid-cols-2">{field("pricePerPerson", "Price per person (₹)", { type: "number" })}{field("maxGuests", "Maximum guests", { type: "number", hint: "The most guests in one booking." })}</div>
+      <p className="text-sm text-ink/70">Agree groceries, travel and extras with the customer before the meal.</p>
+      {isExisting && <label className="flex min-h-11 items-center gap-3"><input type="checkbox" disabled={saving} checked={values.active} onChange={(event) => set("active", event.target.checked)} className="h-5 w-5 accent-leaf" />Accepting new booking requests</label>}
+    </ProfileSection>
+    <div className="sticky bottom-0 z-20 space-y-3 rounded-2xl border border-leaf/25 bg-cream/95 p-4 shadow-lift backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {message && <FormNotice kind="error">{message}</FormNotice>}
+      <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm text-ink/70">{saving ? "Saving your profile…" : dirty ? "You have unsaved changes" : "Your profile details"}</p><button type="submit" disabled={saving} className={`${primaryButton} w-full sm:w-auto`}>{saving ? "Saving…" : isExisting ? "Save changes" : "Create chef profile"}</button></div>
+    </div>
+    <dialog ref={leaveDialog} aria-labelledby="unsaved-heading" onCancel={(event) => { event.preventDefault(); navigation.stay(); }} onClose={navigation.stay} className="m-auto w-[calc(100%_-_2rem)] max-w-md rounded-2xl bg-cream p-6 text-ink shadow-lift backdrop:bg-forest/70">
+      <h2 id="unsaved-heading" className="text-xl font-bold">Leave without saving?</h2><p className="mt-3 text-sm leading-relaxed text-ink/75">Your profile changes haven’t been saved. Stay here to save them, or discard them and leave.</p><div className="mt-5 flex flex-wrap gap-3"><button ref={keepEditing} type="button" onClick={navigation.stay} className={outlineButton}>Keep editing</button><button type="button" onClick={navigation.leave} className={dangerButton}>Discard and leave</button></div>
+    </dialog>
+  </form>;
 }

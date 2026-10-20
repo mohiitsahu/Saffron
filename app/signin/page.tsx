@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SignInButton from "@/components/SignInButton";
+import { safeSignInCallback } from "@/lib/signin";
 
 export const dynamic = "force-dynamic";
 
@@ -26,29 +27,8 @@ function one(value?: string | string[]) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-// Only ever send people back to a page on this site.
-function safeCallback(value?: string | string[]) {
-  const raw = one(value);
-  let path = "/";
-
-  try {
-    if (raw.startsWith("/") && !raw.startsWith("//")) {
-      path = raw;
-    } else if (raw && process.env.NEXTAUTH_URL) {
-      const url = new URL(raw);
-      if (url.origin === new URL(process.env.NEXTAUTH_URL).origin) {
-        path = url.pathname + url.search;
-      }
-    }
-  } catch {
-    path = "/";
-  }
-
-  return path.startsWith("/signin") || path.startsWith("/api/auth") ? "/" : path;
-}
-
 export default async function SignInPage({ searchParams }: { searchParams: SearchParams }) {
-  const callbackUrl = safeCallback(searchParams.callbackUrl);
+  const callbackUrl = safeSignInCallback(searchParams.callbackUrl, process.env.NEXTAUTH_URL);
 
   const session = await getServerSession(authOptions);
   if (session?.user) redirect(callbackUrl);
@@ -87,6 +67,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
         </p>
       </div>
 
+      <p className="mt-4 text-center text-xs text-ink/70">Read our <Link href="/terms" className="text-leaf underline">Terms</Link> and <Link href="/privacy" className="text-leaf underline">Privacy notice</Link> before using Saffron.</p>
       <p className="mt-6 text-center text-sm">
         Just looking?{" "}
         <Link href="/chefs" className="font-medium text-leaf underline underline-offset-4">

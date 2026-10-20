@@ -31,6 +31,10 @@ import { POST as reportProblem } from "@/app/api/reports/route";
 import { PATCH as resolveReport } from "@/app/api/admin/reports/[id]/route";
 import { POST as saveChef } from "@/app/api/chef/route";
 import { discoveryFilter } from "@/lib/discovery";
+import { getBookingsFor } from "@/lib/bookings";
+import { PATCH as editAccount } from "@/app/api/account/route";
+import { POST as deletionRequest } from "@/app/api/account/deletion-request/route";
+import { POST as contactSupport } from "@/app/api/support/route";
 
 context.session = new AsyncLocalStorage<string>();
 const DAY = 86_400_000;
@@ -303,4 +307,96 @@ describe("new booking and moderation workflows", () => {
     expect((await request(stranger, profile.id)).status).toBe(404);
     expect((await accept(profile.userId, booking.id)).status).toBe(409);
   });
+  it("serializes duplicate deletion requests and lets only an admin review them", async () => {
+    const owner = await customer();
+    const answers = await Promise.all(Array.from({ length: 4 }, () => asUser(owner, () => deletionRequest(json({ confirmation: "DELETE" })))));
+    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 409, 409, 409]);
+    expect(await prisma.report.count({ where: { reporterId: owner, reason: "account_deletion" } })).toBe(1);
+    expect(await prisma.user.findUnique({ where: { id: owner } })).not.toBeNull();
+    const report = await prisma.report.findFirstOrThrow();
+    const review = (action: string) => resolveReport(json({ action, note: "Your request is under review; we will explain the next steps." }, "PATCH"), { params: { id: report.id } });
+    expect((await asUser(owner, () => review("resolve"))).status).toBe(403);
+    await prisma.user.create({ data: { id: "integration-admin", name: "Admin", role: "ADMIN" } });
+    expect((await asUser("integration-admin", () => review("hide_profile"))).status).toBe(400);
+    expect((await asUser("integration-admin", () => review("resolve"))).status).toBe(200);
+    expect(await prisma.report.findUniqueOrThrow({ where: { id: report.id } })).toMatchObject({ status: "RESOLVED", resolvedById: "integration-admin" });
+    expect(await prisma.user.findUnique({ where: { id: owner } })).not.toBeNull();
+  });
+
+  it("enforces the support quota under concurrent submissions", async () => {
+    const owner = await customer();
+    const responses = await Promise.all(Array.from({ length: 5 }, () => asUser(owner, () => contactSupport(json({ topic: "support", details: "I need some help with my account." })))));
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 201, 201, 429, 429]);
+    expect(await prisma.report.count({ where: { reporterId: owner, reason: "support" } })).toBe(3);
+  });
+
+  it("saves account details without changing roles or another person's record", async () => {
+    const owner = await customer(); const stranger = await customer();
+    expect((await asUser(owner, () => editAccount(json({ name: "Updated Name", phone: "+91 98765-43210" }, "PATCH")))).status).toBe(200);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: owner } })).toMatchObject({ name: "Updated Name", phone: "9876543210", role: "CUSTOMER" });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: stranger } })).toMatchObject({ name: "Test customer", phone: null });
+    const profile = await chef();
+    expect((await asUser(profile.userId, () => editAccount(json({ name: "Chef Person", phone: "" }, "PATCH")))).status).toBe(400);
+  });
+
+  it("rechecks a reduced guest limit before accepting and preserves the pending request", async () => {
+    const profile = await chef(); const customerId = await customer();
+    const booking = await seedBooking(customerId, profile.userId);
+    await prisma.chefProfile.update({ where: { id: profile.id }, data: { maxGuests: 2 } });
+    const response = await accept(profile.userId, booking.id);
+    expect(response.status).toBe(409);
+    expect(await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).toMatchObject({ status: "REQUESTED", version: 0 });
+    expect(await prisma.bookingEvent.count({ where: { bookingId: booking.id } })).toBe(0);
+    await prisma.chefProfile.update({ where: { id: profile.id }, data: { maxGuests: booking.guests } });
+    expect((await accept(profile.userId, booking.id)).status).toBe(200);
+  });
+
+  it("keeps a meal ready to complete visible behind more than 100 later meals", async () => {
+    const profile = await chef(); const now = Date.now();
+    const customers = Array.from({ length: 101 }, (_, index) => ({ id: "backlog-customer-" + index, name: "Customer" }));
+    await prisma.user.createMany({ data: customers });
+    await prisma.booking.createMany({ data: customers.map((person, index) => ({
+      id: "backlog-booking-" + index, customerId: person.id, chefId: profile.userId,
+      eventDate: new Date(now + (index === 100 ? -0.25 : index + 1) * DAY), status: "ACCEPTED", guests: 2,
+      city: "Bhopal", area: "Test area", address: "Test address", phone: "9876543210", estimatedTotal: 1000,
+    })) });
+    const bookings = await getBookingsFor(profile.userId);
+    expect(bookings.asChef).toHaveLength(101);
+    expect(bookings.asChef.find((booking) => booking.id === "backlog-booking-100")).toMatchObject({ status: "ACCEPTED", eventPassed: true });
+    expect(bookings.asCustomer).toHaveLength(0);
+    const response = await asUser(profile.userId, () => changeBooking(json({ action: "complete" }, "PATCH"), { params: { id: "backlog-booking-100" } }));
+    expect(response.status).toBe(200);
+  });
+
+  it("keeps unreviewed completed meals visible beyond the history window", async () => {
+    const profile = await chef(); const customerId = await customer(); const now = Date.now();
+    await prisma.booking.createMany({ data: Array.from({ length: 100 }, (_, index) => ({
+      customerId, chefId: profile.userId, eventDate: new Date(now - (index + 1) * DAY), status: "DECLINED", guests: 2,
+      city: "Bhopal", area: "Test area", address: "Test address", phone: "9876543210", estimatedTotal: 1000,
+    })) });
+    const needsReview = await prisma.booking.create({ data: {
+      customerId, chefId: profile.userId, eventDate: new Date(now - 200 * DAY), status: "COMPLETED", guests: 2,
+      city: "Bhopal", area: "Test area", address: "Test address", phone: "9876543210", estimatedTotal: 1000,
+    } });
+    const bookings = await getBookingsFor(customerId);
+    expect(bookings.asCustomer).toHaveLength(101);
+    expect(bookings.asCustomer.find((booking) => booking.id === needsReview.id)).toMatchObject({ status: "COMPLETED", reviewRating: null });
+  });
+
+  it("preserves a time suggestion when the post-commit email lookup fails", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    const originalLookup = prisma.booking.findUnique.bind(prisma.booking);
+    const lookup = vi.spyOn(prisma.booking, "findUnique").mockImplementationOnce(originalLookup).mockRejectedValueOnce(new Error("Email preparation unavailable"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await proposeAs(profile.userId, booking.id, "propose", { eventDate: suggestedInput });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.booking.proposedEventDate).toBeTruthy();
+      expect(body.booking.contactPhone).toBeNull();
+      expect(await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).toMatchObject({ status: "REQUESTED", version: 1 });
+      expect(await prisma.bookingEvent.count({ where: { bookingId: booking.id, kind: "time_propose" } })).toBe(1);
+    } finally { lookup.mockRestore(); log.mockRestore(); }
+  });
+
 });

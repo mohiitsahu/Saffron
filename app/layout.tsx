@@ -42,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <footer className="bg-forest text-cream">
           <div aria-hidden="true" className="h-1 bg-gradient-to-r from-transparent via-saffron/80 to-transparent" />
-          <div className="mx-auto grid max-w-screen-2xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid w-full gap-8 px-4 py-10 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
             <div>
               <div className="flex items-center gap-2.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -66,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </Link>
                 </li>
                 <li><Link href="/cancellation" className={footerLink}>Cancellation and changes</Link></li>
+                <li><Link href="/settings" className={footerLink}>Account settings</Link></li>
               </ul>
             </nav>
 
@@ -86,17 +87,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
 
             <div>
-              <h2 className={footerHeading}>Our promise</h2>
+              <h2 className={footerHeading}>Help and information</h2>
               <ul className="mt-3 space-y-2 text-sm text-cream/80">
-                <li>Verified chefs carry a badge</li>
-                <li>Your address stays private until a chef accepts</li>
-                <li>You pay the chef directly after the meal</li>
+                <li><Link href="/help" className={footerLink}>Help and contact</Link></li>
+                <li><Link href="/privacy" className={footerLink}>Privacy</Link></li>
+                <li><Link href="/terms" className={footerLink}>Terms of use</Link></li>
               </ul>
             </div>
           </div>
 
           <div className="border-t border-white/10">
-            <p className="mx-auto max-w-screen-2xl px-4 py-4 text-xs text-cream/70">
+            <p className="w-full px-4 py-4 text-xs text-cream/70 sm:px-6 lg:px-8">
               © {new Date().getFullYear()} Saffron. Saffron never holds or moves your money.
             </p>
           </div>

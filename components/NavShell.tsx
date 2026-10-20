@@ -73,7 +73,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
         hidden ? "-translate-y-full" : "translate-y-0"
       } ${isHome ? "-mb-[72px]" : ""}`}
     >
-      <div className="mx-auto flex h-full max-w-screen-2xl items-center justify-between px-4">{children}</div>
+      <div className="flex h-full w-full items-center justify-between px-4 sm:px-6 lg:px-8">{children}</div>
     </header>
   );
 }

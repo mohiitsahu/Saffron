@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CheckCircleIcon } from "@/components/Icons";
 import ChefForm from "@/components/ChefForm";
+import { pageClass } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function CookWithUsPage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8">
+    <div className={pageClass}>
       {profile && (
         <Link href="/chef" className="text-sm font-medium text-leaf underline underline-offset-4">
           ← Back to my profile
@@ -37,7 +38,7 @@ export default async function CookWithUsPage() {
 
       <div className="mt-2 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <div>
-          <h1 className="text-3xl font-bold">{profile ? "Edit your chef profile" : "Cook with Saffron"}</h1>
+          <h1 className="text-3xl font-bold sm:text-4xl">{profile ? "Edit your chef profile" : "Cook with Saffron"}</h1>
           <p className="mt-2 text-ink/80">
             Customers see your name, city, cuisines, price and menu. Your phone number stays hidden until
             you accept a booking.

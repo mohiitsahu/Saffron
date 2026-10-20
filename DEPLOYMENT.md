@@ -153,3 +153,30 @@ Use a controlled release step, not an API endpoint.
 - A comprehensive content security policy needs testing with actual OAuth and frontend assets.
 - Review dependency security advisories and upgrade pinned packages with regression testing.
 - Unit tests cannot replace real-database tests for PostgreSQL advisory-lock behavior.
+
+## Account requests, help and policies
+
+Account deletion, support and privacy messages use the existing Report table. Apply
+`20261020040000_account_support_requests` with `npx prisma migrate deploy` before
+running this release. It extends the report-target constraint for account requests,
+adds an owner/request lookup index, and prevents duplicate open deletion requests.
+Administrators review them in the report queue. Replies on account deletion requests
+are visible to their owner in Settings; support/privacy replies appear under Help.
+Marking a deletion request reviewed does not delete account data. Handle the actual
+deletion and any retained records separately before telling the owner it is complete.
+
+Before public launch, review the policy text for the real operator, hosting, retention
+process and contact arrangements. The in-app contact form currently requires sign-in;
+provide a public contact route for people who cannot sign in. The pages describe app
+behaviour and are not a certification of legal compliance. Primary reference:
+[MeitY: Digital Personal Data Protection Act 2023](https://www.meity.gov.in/static/uploads/2024/02/Digital-Personal-Data-Protection-Act-2023.pdf).
+
+## Meal galleries
+
+Apply `20261020060000_meal_gallery` with `npx prisma migrate deploy`, then stop the
+local server and run `npx prisma generate` before restarting it. The migration adds
+a separate MealPhoto table; existing chef portraits are unchanged. Gallery images
+are limited to six per chef and 1 MB each on the server; browser uploads are
+compressed. Photo metadata queries do not load image bytes. Meal photo responses
+revalidate before reuse so removals and hidden listings stop serving images on
+subsequent requests. Verify upload/edit/reorder/delete and admin removal on staging.
