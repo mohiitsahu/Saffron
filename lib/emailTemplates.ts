@@ -8,7 +8,9 @@ export type BookingEmailKind =
   | "cancelledByChef" // to the customer
   | "completed" // to the customer: invite a review
   | "rescheduled"
-  | "proposalAccepted";
+  | "proposalAccepted"
+  | "proposalDeclined"
+  | "proposalWithdrawn";
   // Time proposals keep contact details private until the customer accepts.
 
 export type BookingEmailData = {
@@ -45,6 +47,14 @@ function copyFor(d: BookingEmailData): Copy {
       return { subject: `${d.customerName} accepted your suggested time`, heading: "Your suggested time is confirmed",
         body: `${d.customerName} agreed to the new time below. Contact details are now in My bookings.`,
         button: "See the booking", path: "/bookings", showArea: true };
+    case "proposalDeclined":
+      return { subject: `${d.customerName} declined your suggested time`, heading: "Your suggested time was declined",
+        body: `${d.customerName} declined the suggested time below. This closes the booking request. Contact details remain private.`,
+        button: "See your bookings", path: "/bookings", showArea: false };
+    case "proposalWithdrawn":
+      return { subject: `${d.chefName} withdrew the suggested time`, heading: "The suggested time was withdrawn",
+        body: `${d.chefName} withdrew the suggested time below. Your original booking request is still pending. Check My bookings for its original time and status.`,
+        button: "See your request", path: "/bookings?tab=mine", showArea: false };
     case "requested":
       return {
         subject: `New booking request for ${when}`,

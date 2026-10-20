@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { bookingCreateSchema } from "@/lib/validation";
-import { isRealDay, dayStartIST, dayEndIST } from "@/lib/availability";
+import { BOOKING_GAP_MS, isRealDay, dayStartIST, dayEndIST } from "@/lib/availability";
 
 export function discoveryFilter(day: string, time: string, guests: string, now = Date.now()) {
   const where: Prisma.ChefProfileWhereInput = { active: true, suspended: false };
@@ -23,7 +23,7 @@ export function discoveryFilter(day: string, time: string, guests: string, now =
       blockedDays: { none: { day } },
       // With no time, conservatively exclude the whole accepted-booking day.
       chefBookings: { none: { status: "ACCEPTED", eventDate: date
-        ? { gt: new Date(date.getTime() - 14_400_000), lt: new Date(date.getTime() + 14_400_000) }
+        ? { gt: new Date(date.getTime() - BOOKING_GAP_MS), lt: new Date(date.getTime() + BOOKING_GAP_MS) }
         : { gte: dayStartIST(day), lte: dayEndIST(day) } } },
     };
   } else if (time) error = "Choose a date as well as a time.";

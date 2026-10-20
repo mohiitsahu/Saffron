@@ -19,8 +19,8 @@ export function siteUrl() {
 // Emails the right person about a booking. Safe to call anywhere: it never throws.
 export async function notifyBooking(kind: BookingEmailKind, booking: NotifyBooking): Promise<void> {
   try {
-    // New requests and customer cancellations go to the chef. Everything else goes to the customer.
-    const toChef = kind === "requested" || kind === "cancelledByCustomer" || kind === "proposalAccepted";
+    // Customer actions go to the chef; chef actions go to the customer.
+    const toChef = kind === "requested" || kind === "cancelledByCustomer" || kind === "proposalAccepted" || kind === "proposalDeclined";
     const recipient = toChef ? booking.chef : booking.customer;
     if (!recipient.email) return;
 

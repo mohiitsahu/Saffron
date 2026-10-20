@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bookingCreateSchema } from "@/lib/validation";
 import { bookingSelect, serializeBooking } from "@/lib/bookings";
-import { istDayKey } from "@/lib/availability";
+import { BOOKING_GAP_MS, istDayKey } from "@/lib/availability";
 import { notifyBooking } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const blocked = await tx.chefBlockedDay.findUnique({ where: { userId_day: { userId: booking.chefId, day: istDayKey(date) } } });
       const clash = await tx.booking.findFirst({ where: {
         chefId: booking.chefId, status: "ACCEPTED", id: { not: booking.id },
-        eventDate: { gt: new Date(date.getTime() - 14_400_000), lt: new Date(date.getTime() + 14_400_000) },
+        eventDate: { gt: new Date(date.getTime() - BOOKING_GAP_MS), lt: new Date(date.getTime() + BOOKING_GAP_MS) },
       } });
       if (blocked || clash) return { error: "The chef is unavailable at this time. Choose another time.", status: 409 };
     }
@@ -74,22 +75,31 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       bookingId: booking.id, actorId: userId, fromStatus: booking.status, toStatus: next,
       kind: `time_${input.action}`,
     } });
-    return { booking: updated };
-  }, { maxWait: 10_000, timeout: 15_000 });
-  if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
-  if (input.action === "propose" || input.action === "accept") {
-    try {
-      const mail = await prisma.booking.findUnique({ where: { id: params.id }, select: {
-        eventDate: true, proposedEventDate: true, guests: true, area: true, estimatedTotal: true,
-        customer: { select: { name: true, email: true } },
-        chef: { select: { name: true, email: true, chefProfile: { select: { displayName: true } } } },
-      } });
-      if (mail) await notifyBooking(input.action === "propose" ? "rescheduled" : "proposalAccepted", {
-        ...mail, eventDate: mail.proposedEventDate ?? mail.eventDate,
-      });
-    } catch {
-      console.error("Booking time email could not be prepared.");
+    // Keep the time this action addressed, even after declining/withdrawing clears it.
+    const notificationDate = input.action === "propose" ? input.eventDate : booking.proposedEventDate!;
+    return { booking: updated, notificationDate };
+  }, { maxWait: 10_000, timeout: 15_000 }).catch((error: unknown) => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (["P2028", "P2034", "P2024"].includes(error.code)) {
+        return { error: "This booking could not be updated right now. Refresh My bookings before trying again.", status: 503 };
+      }
+      if (error.code === "P2025") return { error: "Booking not found. Refresh My bookings.", status: 404 };
     }
+    throw error;
+  });
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
+  try {
+    const mail = await prisma.booking.findUnique({ where: { id: params.id }, select: {
+      guests: true, area: true, estimatedTotal: true,
+      customer: { select: { name: true, email: true } },
+      chef: { select: { name: true, email: true, chefProfile: { select: { displayName: true } } } },
+    } });
+    const kinds = { propose: "rescheduled", accept: "proposalAccepted", decline: "proposalDeclined", withdraw: "proposalWithdrawn" } as const;
+    if (mail) await notifyBooking(kinds[input.action], {
+      ...mail, eventDate: result.notificationDate,
+    });
+  } catch {
+    console.error("Booking time email could not be prepared.");
   }
   return NextResponse.json({ booking: serializeBooking(result.booking, userId) });
 }

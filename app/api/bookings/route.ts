@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bookingSelect, getBookingsFor, serializeBooking, settleStaleBookings } from "@/lib/bookings";
 import { bookingCreateSchema, fieldErrors } from "@/lib/validation";
-import { istDayKey } from "@/lib/availability";
+import { BOOKING_GAP_MS, istDayKey } from "@/lib/availability";
 import { notifyBooking } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
@@ -145,7 +145,7 @@ export async function POST(req: Request) {
           select: { id: true },
         }),
         tx.booking.findFirst({ where: { chefId: chef.userId, status: "ACCEPTED", eventDate: {
-          gt: new Date(eventDate.getTime() - 14_400_000), lt: new Date(eventDate.getTime() + 14_400_000),
+          gt: new Date(eventDate.getTime() - BOOKING_GAP_MS), lt: new Date(eventDate.getTime() + BOOKING_GAP_MS),
         } }, select: { id: true } }),
       ]);
 

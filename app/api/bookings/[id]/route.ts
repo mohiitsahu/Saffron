@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bookingSelect, resolveTransition, serializeBooking, type BookingView } from "@/lib/bookings";
 import { formatDateTimeIST } from "@/lib/format";
-import { istDayKey } from "@/lib/availability";
+import { BOOKING_GAP_MS, istDayKey } from "@/lib/availability";
 import { bookingActionSchema } from "@/lib/validation";
 import { notifyBooking } from "@/lib/notify";
 import type { BookingEmailKind } from "@/lib/emailTemplates";
@@ -14,7 +14,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // A chef needs at least this long between two accepted bookings.
-const ACCEPT_GAP_MS = 4 * 60 * 60 * 1000;
 
 type Outcome = { ok: true; booking: BookingView } | { ok: false; status: number; error: string };
 
@@ -84,8 +83,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           status: "ACCEPTED",
           id: { not: booking.id },
           eventDate: {
-            gt: new Date(booking.eventDate.getTime() - ACCEPT_GAP_MS),
-            lt: new Date(booking.eventDate.getTime() + ACCEPT_GAP_MS),
+            gt: new Date(booking.eventDate.getTime() - BOOKING_GAP_MS),
+            lt: new Date(booking.eventDate.getTime() + BOOKING_GAP_MS),
           },
         },
         select: { eventDate: true },

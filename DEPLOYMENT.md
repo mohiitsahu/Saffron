@@ -117,6 +117,31 @@ On staging and production, `NEXTAUTH_URL` must match the site's HTTPS origin.
 IMPORTANT: Do not automatically run migrations on every serverless function invocation.
 Use a controlled release step, not an API endpoint.
 
+### Neon on Netlify or another serverless host (Prisma 5)
+
+Use Neon's pooled connection string for `DATABASE_URL` and the direct connection
+for `DIRECT_URL` in the host's environment settings. The schema already uses
+`DIRECT_URL` for migrations. Example placeholders, not working credentials:
+
+```dotenv
+DATABASE_URL="postgresql://USER:PASSWORD@ep-EXAMPLE-pooler.REGION.aws.neon.tech/DBNAME?sslmode=require&connection_limit=1"
+DIRECT_URL="postgresql://USER:PASSWORD@ep-EXAMPLE.REGION.aws.neon.tech/DBNAME?sslmode=require"
+```
+
+Copy the actual hosts and required TLS parameters from Neon. Preserve existing
+query parameters when adding options (`&` after the first `?`). For this project's
+Prisma 5 client, `connection_limit=1` is a conservative serverless starting point;
+adjust after testing concurrency and pool wait times. Warm function instances reuse
+their Prisma client, but separate instances still have separate client pools.
+
+Do not add `pgbouncer=true` automatically: Prisma recommends it for PgBouncer
+versions below 1.21, and recommends leaving it unset for newer compatible poolers.
+Use the provider's guidance for the actual pooler. Transaction-scoped advisory
+locks remain on the same connection throughout the transaction; do not replace
+them with session-scoped locks when using transaction pooling. Redeploy after
+changing hosting variables. See [Neon's Prisma guide](https://neon.com/docs/guides/prisma)
+and [Prisma's PgBouncer guidance](https://docs.prisma.io/docs/orm/v6/prisma-client/setup-and-configuration/databases-connections/pgbouncer).
+
 ## 6. Staging checklist
 
 - [ ] New customer can sign in via Google.
@@ -164,6 +189,12 @@ Administrators review them in the report queue. Replies on account deletion requ
 are visible to their owner in Settings; support/privacy replies appear under Help.
 Marking a deletion request reviewed does not delete account data. Handle the actual
 deletion and any retained records separately before telling the owner it is complete.
+There is currently no automatic account deletion/anonymisation endpoint. Booking
+and review foreign keys intentionally restrict deleting a referenced User row.
+A future deletion workflow should retain that row where necessary and anonymise
+the appropriate personal data, revoke sessions and linked sign-in accounts, and
+review chef profiles/photos and personal data stored in booking/report records.
+Blanking only the User's name, email and phone is not a complete deletion workflow.
 
 Before public launch, review the policy text for the real operator, hosting, retention
 process and contact arrangements. The in-app contact form currently requires sign-in;

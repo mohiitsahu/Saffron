@@ -1,6 +1,7 @@
 // Chef availability. A "day" is a calendar day in India, written like "2030-11-02".
 // Days are stored as text so there is no timezone maths to get wrong.
 
+export const BOOKING_GAP_MS = 4 * 60 * 60 * 1000;
 export const MAX_BLOCKED_DAYS = 200; // per chef
 export const MAX_RANGE_DAYS = 90; // most days that can be added in one go
 const MAX_AHEAD_DAYS = 366;
