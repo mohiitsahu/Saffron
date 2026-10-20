@@ -32,11 +32,13 @@ export default function ChefForm({ initial, isExisting }: { initial: ChefFormVal
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [portrait, setPortrait] = useState<Blob | null | undefined>(undefined);
+  const [portraitBusy, setPortraitBusy] = useState(false);
   const customList = splitCuisines(custom);
   const cuisines = [...selected, ...customList];
   const totalCuisines = cuisines.length;
   const normalise = (items: string[]) => [...items].sort().join(",");
-  const dirty = !saved && (Object.entries(values).some(([key, value]) => key !== "cuisines" && value !== initial[key as keyof ChefFormValues]) || normalise(cuisines) !== normalise(splitCuisines(initial.cuisines)));
+  const dirty = !saved && (portraitBusy || portrait !== undefined || Object.entries(values).some(([key, value]) => key !== "cuisines" && value !== initial[key as keyof ChefFormValues]) || normalise(cuisines) !== normalise(splitCuisines(initial.cuisines)));
   const navigation = useUnsavedChanges(dirty);
   useEffect(() => {
     if (navigation.pendingHref && !leaveDialog.current?.open) { leaveDialog.current?.showModal(); keepEditing.current?.focus(); }
@@ -46,9 +48,12 @@ export default function ChefForm({ initial, isExisting }: { initial: ChefFormVal
   function set<K extends keyof ChefFormValues>(key: K, value: ChefFormValues[K]) { setSaved(false); setValues((current) => ({ ...current, [key]: value })); }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setSaving(true); setErrors({}); setMessage("");
+    event.preventDefault(); if (portraitBusy || saving) return; setSaving(true); setErrors({}); setMessage("");
     try {
-      const res = await fetch("/api/chef", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...values, cuisines, pricePerPerson: Number(values.pricePerPerson), maxGuests: Number(values.maxGuests), yearsExperience: Number(values.yearsExperience) }) });
+      const details = { ...values, photoUrl: portrait !== undefined ? "" : values.photoUrl, cuisines, pricePerPerson: Number(values.pricePerPerson), maxGuests: Number(values.maxGuests), yearsExperience: Number(values.yearsExperience) };
+      let body: string | FormData = JSON.stringify(details);
+      if (portrait) { body = new FormData(); body.append("profile", JSON.stringify(details)); body.append("file", portrait, "portrait.jpg"); }
+      const res = await fetch("/api/chef", { method: "PUT", ...(typeof body === "string" ? { headers: { "Content-Type": "application/json" } } : {}), body });
       const data = await res.json();
       if (!res.ok) { setErrors(data.fieldErrors ?? {}); setMessage(data.error ?? "Could not save your profile. Try again."); return; }
       setSaved(true); router.push("/chef?saved=1"); router.refresh();
@@ -66,7 +71,7 @@ export default function ChefForm({ initial, isExisting }: { initial: ChefFormVal
       <div className="grid gap-5 sm:grid-cols-2">{field("displayName", "Chef name", { autoComplete: "name" })}{field("city", "City", { hint: "For example: Bhopal", autoComplete: "address-level2" })}</div>
       {field("bio", "Bio", { rows: 4, hint: "Tell customers about your cooking and style." })}
       <div className="grid gap-5 sm:grid-cols-2">{field("yearsExperience", "Years of experience", { type: "number" })}{field("phone", "Phone number", { type: "tel", autoComplete: "tel-national", hint: "Shared only after you accept a booking." })}</div>
-      <PhotoUpload value={values.photoUrl} onChange={(url) => set("photoUrl", url)} name={values.displayName} error={errors.photoUrl} />
+      <PhotoUpload value={values.photoUrl} draft={portrait} disabled={saving} onBusyChange={setPortraitBusy} onChange={(photo) => { setSaved(false); setPortrait(photo === null && !initial.photoUrl ? undefined : photo); }} name={values.displayName} error={errors.photoUrl} />
     </ProfileSection>
     <ProfileSection id="your-cooking" title="Your cooking" hint="Show the cuisines and dishes customers can request.">
       <fieldset disabled={saving} data-cuisine-error={Boolean(errors.cuisines)} aria-describedby={errors.cuisines ? "cuisines-help cuisines-error" : "cuisines-help"} className="min-w-0"><legend className={labelClass}>Cuisines</legend><p id="cuisines-help" className="mb-3 text-xs text-ink/70">Choose up to {MAX_CUISINES}. {totalCuisines} selected.</p><div className="flex flex-wrap gap-2">{CUISINE_OPTIONS.map((name) => {
@@ -83,7 +88,7 @@ export default function ChefForm({ initial, isExisting }: { initial: ChefFormVal
     </ProfileSection>
     <div className="sticky bottom-0 z-20 space-y-3 rounded-2xl border border-leaf/25 bg-cream/95 p-4 shadow-lift backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]">
       {message && <FormNotice kind="error">{message}</FormNotice>}
-      <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm text-ink/70">{saving ? "Saving your profile…" : dirty ? "You have unsaved changes" : "Your profile details"}</p><button type="submit" disabled={saving} className={`${primaryButton} w-full sm:w-auto`}>{saving ? "Saving…" : isExisting ? "Save changes" : "Create chef profile"}</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm text-ink/70">{portraitBusy ? "Preparing your photo…" : saving ? "Saving your profile…" : dirty ? "You have unsaved changes" : "Your profile details"}</p><button type="submit" disabled={saving || portraitBusy} className={`${primaryButton} w-full sm:w-auto`}>{saving ? "Saving…" : isExisting ? "Save changes" : "Create chef profile"}</button></div>
     </div>
     <dialog ref={leaveDialog} aria-labelledby="unsaved-heading" onCancel={(event) => { event.preventDefault(); navigation.stay(); }} onClose={navigation.stay} className="m-auto w-[calc(100%_-_2rem)] max-w-md rounded-2xl bg-cream p-6 text-ink shadow-lift backdrop:bg-forest/70">
       <h2 id="unsaved-heading" className="text-xl font-bold">Leave without saving?</h2><p className="mt-3 text-sm leading-relaxed text-ink/75">Your profile changes haven’t been saved. Stay here to save them, or discard them and leave.</p><div className="mt-5 flex flex-wrap gap-3"><button ref={keepEditing} type="button" onClick={navigation.stay} className={outlineButton}>Keep editing</button><button type="button" onClick={navigation.leave} className={dangerButton}>Discard and leave</button></div>

@@ -11,6 +11,7 @@ Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Prisma + PostgreSQ
 
 - Find chefs by city, cuisine, dish and budget, with ratings and verified badges
 - Chef profiles with a separate portrait, sample menu, reviews and up to six meal photos with dish names/captions
+- Portrait selections/removals stay local until Save; profile details and portrait changes commit together. Unsaved edits are guarded during links and browser Back/Forward navigation.
 - Meal gallery uses six compact photo slots with multi-image selection, browser compression, drag/keyboard rearrangement and a popup editor; admins can remove photos with an audit note
 - Booking requests: accept, decline, cancel and complete, with the customer's address and the
   chef's phone number revealed only after the chef accepts

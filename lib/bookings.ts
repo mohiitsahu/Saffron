@@ -225,13 +225,14 @@ export async function getBookingsFor(userId: string) {
     { customerId: userId, status: "COMPLETED", review: { is: null } },
   ] };
   // History has a bounded initial window; pending work must never share its cutoff.
-  // Both reads see the same snapshot, so a concurrent transition cannot duplicate a row.
-  const [activeRows, historyRows] = await prisma.$transaction(async (tx) => Promise.all([
-    tx.booking.findMany({ where: { AND: [scope, actionable] },
+  // A batch transaction preserves the shared snapshot without the interactive
+  // transaction's five-second lifetime (which includes database/network delays).
+  const [activeRows, historyRows] = await prisma.$transaction([
+    prisma.booking.findMany({ where: { AND: [scope, actionable] },
       orderBy: [{ eventDate: "asc" }, { id: "asc" }], select: bookingSelect }),
-    tx.booking.findMany({ where: { AND: [scope, { NOT: actionable }] },
+    prisma.booking.findMany({ where: { AND: [scope, { NOT: actionable }] },
       orderBy: [{ eventDate: "desc" }, { id: "desc" }], take: 100, select: bookingSelect }),
-  ]), { isolationLevel: "RepeatableRead" });
+  ], { isolationLevel: "RepeatableRead" });
   const rows = [...activeRows, ...historyRows];
 
   const views = rows.map((row) => serializeBooking(row, userId));

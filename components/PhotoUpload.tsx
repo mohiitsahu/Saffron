@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { labelClass, outlineButton, primaryButton } from "@/lib/ui";
 
 import { shrinkPhoto } from "@/lib/clientPhotos";
@@ -11,51 +11,49 @@ export default function PhotoUpload({
   onChange,
   name,
   error,
+  draft,
+  disabled = false,
+  onBusyChange,
 }: {
   value: string; // the photo's URL, or "" when there is none
-  onChange: (url: string) => void;
+  onChange: (photo: Blob | null) => void;
   name: string; // used for the placeholder letter
   error?: string;
+  draft?: Blob | null;
+  disabled?: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [preview, setPreview] = useState("");
+  useEffect(() => {
+    if (!draft) { setPreview(""); return; }
+    const url = URL.createObjectURL(draft); setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [draft]);
+  const shownPhoto = draft === undefined ? value : draft === null ? "" : preview;
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // lets the same file be chosen again later
     if (!file) return;
 
-    setBusy(true);
+    setBusy(true); onBusyChange(true);
     setProblem(null);
     try {
       const blob = await shrinkPhoto(file);
-      const body = new FormData();
-      body.append("file", blob, "photo.jpg");
-
-      const res = await fetch("/api/chef/photo", { method: "POST", body });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Upload failed. Try again.");
-      onChange(data.url);
+      onChange(blob);
     } catch (err) {
       setProblem(err instanceof Error ? err.message : "Upload failed. Try again.");
     } finally {
-      setBusy(false);
+      setBusy(false); onBusyChange(false);
     }
   }
 
-  async function onRemove() {
-    setBusy(true);
+  function onRemove() {
     setProblem(null);
-    try {
-      const res = await fetch("/api/chef/photo", { method: "DELETE" });
-      if (!res.ok) throw new Error("Could not remove the photo. Try again.");
-      onChange("");
-    } catch (err) {
-      setProblem(err instanceof Error ? err.message : "Could not remove the photo. Try again.");
-    } finally {
-      setBusy(false);
-    }
+    onChange(null);
   }
 
   const shownError = problem ?? error;
@@ -65,9 +63,9 @@ export default function PhotoUpload({
       <span className={labelClass}>Photo (optional)</span>
       <div className="flex items-center gap-4">
         <div className="relative h-28 w-28 flex-none overflow-hidden rounded-2xl bg-sage ring-4 ring-sage">
-          {value ? (
+          {shownPhoto ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="Your photo" className="h-full w-full object-cover" />
+            <img src={shownPhoto} alt="Your photo" className="h-full w-full object-cover" />
           ) : (
             <div
               aria-hidden="true"
@@ -87,20 +85,20 @@ export default function PhotoUpload({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || disabled}
               onClick={() => inputRef.current?.click()}
-              className={value ? outlineButton : primaryButton}
+              className={shownPhoto ? outlineButton : primaryButton}
             >
-              {value ? "Change photo" : "Upload a photo"}
+              {shownPhoto ? "Change photo" : "Upload a photo"}
             </button>
-            {value && (
-              <button type="button" disabled={busy} onClick={onRemove} className={outlineButton}>
+            {shownPhoto && (
+              <button type="button" disabled={busy || disabled} onClick={onRemove} className={outlineButton}>
                 Remove
               </button>
             )}
           </div>
           <p className="mt-2 text-xs text-ink/70">
-            A clear photo of you or your food. Everyone on Saffron can see it.
+            A clear photo of you or your food. Changes go public only when you save your profile.
           </p>
         </div>
       </div>
@@ -112,6 +110,7 @@ export default function PhotoUpload({
         className="sr-only"
         tabIndex={-1}
         onChange={onPick}
+        disabled={busy || disabled}
       />
 
       {shownError && (

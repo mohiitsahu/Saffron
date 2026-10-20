@@ -31,6 +31,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (booking.status !== "REQUESTED") return { error: "This request has already been answered.", status: 409 };
     const chefAction = input.action === "propose" || input.action === "withdraw";
     if (userId !== (chefAction ? booking.chefId : booking.customerId)) return { error: "You cannot perform this action.", status: 403 };
+    // A stale browser can submit without loading the page that normally expires
+    // old requests. Check the existing deadlines before considering a new one.
+    if (Math.max(booking.eventDate.getTime(), booking.proposedEventDate?.getTime() ?? 0) <= Date.now()) {
+      const expired = await tx.booking.updateMany({ where: { id: booking.id, status: "REQUESTED", version: booking.version }, data: { status: "EXPIRED", proposedEventDate: null, version: { increment: 1 } } });
+      if (expired.count) await tx.bookingEvent.create({ data: { bookingId: booking.id, actorId: null, fromStatus: "REQUESTED", toStatus: "EXPIRED" } });
+      return { error: "This request has expired. The customer needs to send a new request.", status: 409 };
+    }
     if (input.action !== "propose" && booking.proposedEventDate?.toISOString() !== input.expectedDate) {
       return { error: "The proposed time changed. Refresh before answering.", status: 409 };
     }

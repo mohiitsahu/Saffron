@@ -383,6 +383,71 @@ describe("new booking and moderation workflows", () => {
     expect(bookings.asCustomer.find((booking) => booking.id === needsReview.id)).toMatchObject({ status: "COMPLETED", reviewRating: null });
   });
 
+  it("loads bookings when a read waits longer than the interactive transaction lifetime", async () => {
+    const profile = await chef(); const customerId = await customer();
+    const pending = await seedBooking(customerId, profile.userId);
+    const history = await seedBooking(customerId, profile.userId, "DECLINED");
+    const originalTransaction = prisma.$transaction.bind(prisma);
+    const runBatch = originalTransaction as unknown as (queries: unknown, options: unknown) => Promise<unknown>;
+    const transaction = vi.spyOn(prisma, "$transaction").mockImplementationOnce((async (queries: unknown, options: unknown) => {
+      let acquired!: () => void;
+      const locked = new Promise<void>((resolve) => { acquired = resolve; });
+      // Block only the snapshot read, after stale requests have been settled.
+      // This reproduces a slow database without accessing the application's DB.
+      const holding = originalTransaction(async (tx) => {
+        await tx.$executeRawUnsafe('LOCK TABLE "Booking" IN ACCESS EXCLUSIVE MODE');
+        acquired();
+        await tx.$queryRaw`SELECT 1 FROM pg_sleep(6)`;
+      }, { timeout: 15_000 });
+      await locked;
+      try { return await runBatch(queries, options); }
+      finally { await holding; }
+    }) as typeof prisma.$transaction);
+    try {
+      const bookings = await getBookingsFor(customerId);
+      expect(bookings.asCustomer.map((booking) => booking.id).sort()).toEqual([pending.id, history.id].sort());
+      expect(bookings.asChef).toHaveLength(0);
+    } finally { transaction.mockRestore(); }
+  });
+
+  it.each([false, true])("rejects a new proposal after the request's existing deadlines expire (prior proposal: %s)", async (withProposal) => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    const past = new Date(Date.now() - 60_000);
+    await prisma.booking.update({ where: { id: booking.id }, data: { eventDate: past, proposedEventDate: withProposal ? past : null } });
+    const response = await proposeAs(profile.userId, booking.id, "propose", { eventDate: suggestedInput });
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toContain("expired");
+    expect(await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).toMatchObject({ status: "EXPIRED", proposedEventDate: null, version: 1 });
+    expect(await prisma.bookingEvent.count({ where: { bookingId: booking.id, toStatus: "EXPIRED", actorId: null } })).toBe(1);
+    expect(await prisma.bookingEvent.count({ where: { bookingId: booking.id, kind: "time_propose" } })).toBe(0);
+  });
+
+  it("allows a still-future proposal to be accepted after the original time passes", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    const proposedEventDate = new Date(`${suggestedInput}:00+05:30`);
+    await prisma.booking.update({ where: { id: booking.id }, data: { eventDate: new Date(Date.now() - 60_000), proposedEventDate } });
+    const response = await proposeAs(customerId, booking.id, "accept", { expectedDate: proposedEventDate.toISOString() });
+    expect(response.status).toBe(200);
+    expect(await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).toMatchObject({ status: "ACCEPTED", eventDate: proposedEventDate, proposedEventDate: null });
+  });
+
+  it("accepts a booking after waiting six seconds for another chef operation", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    let acquired!: () => void; const locked = new Promise<void>((resolve) => { acquired = resolve; });
+    const holding = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${profile.userId}))`;
+      acquired(); await tx.$queryRaw`SELECT 1 FROM pg_sleep(6)`;
+    }, { timeout: 15_000 });
+    await locked;
+    try {
+      const response = await accept(profile.userId, booking.id);
+      expect(response.status).toBe(200);
+      expect((await response.json()).booking.status).toBe("ACCEPTED");
+    } finally { await holding; }
+    expect(await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).toMatchObject({ status: "ACCEPTED", version: 1 });
+    expect(await prisma.bookingEvent.count({ where: { bookingId: booking.id, toStatus: "ACCEPTED" } })).toBe(1);
+  });
+
   it("preserves a time suggestion when the post-commit email lookup fails", async () => {
     const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
     const originalLookup = prisma.booking.findUnique.bind(prisma.booking);

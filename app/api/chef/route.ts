@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { chefProfileSchema } from "@/lib/validation";
-import { photoIdFromUrl } from "@/lib/photos";
+import { photoIdFromUrl, photoUrlFor } from "@/lib/photos";
+import { readPortraitDraft } from "@/lib/portraitDraft";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +29,13 @@ async function save(req: Request) {
   }
 
   let body: unknown;
+  let portrait: { data: Buffer; contentType: string } | undefined;
   try {
-    body = await req.json();
+    if (req.headers.get("content-type")?.startsWith("multipart/form-data")) {
+      const upload = await readPortraitDraft(req);
+      if ("error" in upload) return NextResponse.json({ error: upload.error }, { status: upload.status });
+      body = upload.body; portrait = upload.portrait;
+    } else body = await req.json();
   } catch {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
@@ -52,23 +58,25 @@ async function save(req: Request) {
 
   // A photo link may only point at a photo this person uploaded themselves.
   const photoId = data.photoUrl ? photoIdFromUrl(data.photoUrl) : null;
-  if (photoId) {
-    const own = await prisma.chefPhoto.findFirst({ where: { id: photoId, userId }, select: { id: true } });
-    if (!own) {
-      return NextResponse.json(
-        {
+  // Ownership, portrait replacement and profile writes share the same lock/transaction.
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+    if (photoId && !portrait) {
+      const own = await tx.chefPhoto.findFirst({ where: { id: photoId, userId }, select: { id: true } });
+      if (!own) {
+        return {
           error: "Some details need fixing. Check the highlighted fields.",
           fieldErrors: { photoUrl: "That photo isn't yours. Upload your own photo." },
-        },
-        { status: 400 }
-      );
+        };
+      }
     }
-  }
-
-  // One transaction: save the profile, store the phone, and upgrade
-  // CUSTOMER to CHEF. ADMIN and existing CHEF roles are left alone.
-  const profile = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+    if (portrait) {
+      await tx.chefPhoto.deleteMany({ where: { userId } });
+      const uploaded = await tx.chefPhoto.create({ data: { userId, ...portrait }, select: { id: true } });
+      data.photoUrl = photoUrlFor(uploaded.id);
+    } else if (!data.photoUrl) {
+      await tx.chefPhoto.deleteMany({ where: { userId } });
+    }
     const existing = await tx.chefProfile.findUnique({ where: { userId }, select: { suspended: true } });
     const safeData = existing?.suspended ? { ...data, active: false } : data;
     const saved = await tx.chefProfile.upsert({
@@ -78,10 +86,10 @@ async function save(req: Request) {
     });
     await tx.user.update({ where: { id: userId }, data: { phone } });
     await tx.user.updateMany({ where: { id: userId, role: "CUSTOMER" }, data: { role: "CHEF" } });
-    return saved;
+    return { profile: saved };
   });
 
-  return NextResponse.json({ profile });
+  return NextResponse.json(result, { status: "error" in result ? 400 : 200 });
 }
 
 export { save as POST, save as PUT };

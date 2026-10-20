@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
@@ -175,6 +176,15 @@ describe("PATCH /api/bookings/[id]: emails", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     try { expect((await patch("accept")).status).toBe(200); }
     finally { log.mockRestore(); }
+  });
+
+  it.each(["P2028", "P2034", "P2024"])("returns a retryable response for transaction failure %s", async (code) => {
+    mocks.session.mockResolvedValue({ user: { id: "chef1" } }); setBooking("REQUESTED", future);
+    mocks.prisma.$transaction.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Temporary database failure", { code, clientVersion: "test" }));
+    const response = await patch("accept");
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toContain("Refresh My bookings");
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 
   it("fails within the transaction when response data cannot be prepared", async () => {

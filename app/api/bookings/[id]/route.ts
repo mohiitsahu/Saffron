@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -124,6 +125,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // Build the response before commit so a failed read/serialization rolls back the action.
     const fresh = await tx.booking.findUniqueOrThrow({ where: { id: booking.id }, select: bookingSelect });
     return { ok: true, booking: serializeBooking(fresh, userId) };
+  }, { maxWait: 10_000, timeout: 15_000 }).catch((error: unknown): Outcome => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2028", "P2034", "P2024"].includes(error.code)) {
+      return { ok: false, status: 503, error: "This booking could not be updated right now. Refresh My bookings before trying again." };
+    }
+    throw error;
   });
 
   if (!outcome.ok) {
