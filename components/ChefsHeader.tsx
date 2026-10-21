@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import SearchBar from "@/components/SearchBar";
 import MealSearchPicker from "@/components/MealSearchPicker";
@@ -59,10 +59,11 @@ export default function ChefsHeader({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const state = useRef<State>(initial);
-  const lastUrl = useRef("");
+  const lastUrl = useRef(toUrl(initial));
   const priceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [sort, setSort] = useState(initial.sort);
+  const [searchVersion, setSearchVersion] = useState(0);
   const [maxPrice, setMaxPrice] = useState(initial.maxPrice);
   const [verified, setVerified] = useState(initial.verified);
   const [cuisines, setCuisines] = useState<string[]>(
@@ -71,6 +72,22 @@ export default function ChefsHeader({
   const [showFilters, setShowFilters] = useState(
     Boolean(initial.maxPrice || initial.verified || initial.cuisine)
   );
+
+  useEffect(() => {
+    const url = toUrl(initial);
+    // Own navigations already have current drafts. External resets/back-forward
+    // must replace every control and cancel work queued for the previous URL.
+    if (url === lastUrl.current) return;
+    clearTimeout(priceTimer.current);
+    state.current = initial;
+    lastUrl.current = url;
+    setSort(initial.sort); setMaxPrice(initial.maxPrice); setVerified(initial.verified);
+    setCuisines(initial.cuisine ? initial.cuisine.split(",").filter(Boolean) : []);
+    setShowFilters(Boolean(initial.maxPrice || initial.verified || initial.cuisine));
+    // Also discard unsubmitted text and its debounce timer on an external reset.
+    setSearchVersion((version) => version + 1);
+  }, [initial]);
+  useEffect(() => () => clearTimeout(priceTimer.current), []);
 
   function push(patch: Partial<State>) {
     state.current = { ...state.current, ...patch };
@@ -84,6 +101,7 @@ export default function ChefsHeader({
 
   function onPriceChange(value: string) {
     setMaxPrice(value);
+    state.current = { ...state.current, maxPrice: value.trim() };
     clearTimeout(priceTimer.current);
     priceTimer.current = setTimeout(() => push({ maxPrice: value.trim() }), 400);
   }
@@ -107,6 +125,7 @@ export default function ChefsHeader({
   return (
     <div>
       <SearchBar
+        key={searchVersion}
         variant="page"
         initialQ={initial.q}
         initialCity={initial.city}

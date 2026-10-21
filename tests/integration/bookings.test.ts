@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import type { BookingStatus } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -134,6 +135,24 @@ beforeEach(async () => {
 afterAll(() => prisma.$disconnect());
 
 describe("private booking notifications", () => {
+  it("preserves prior read history when migrating to event acknowledgements", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    const cutoff = new Date(); const old = new Date(cutoff.getTime() - 60_000);
+    await prisma.user.update({ where: { id: customerId }, data: { notificationsReadAt: cutoff } });
+    const prior = await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED", createdAt: old } });
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: customerId, toStatus: "REQUESTED", createdAt: old } });
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "CANCELLED", createdAt: new Date(cutoff.getTime() + 60_000) } });
+    const migration = readFileSync(new URL("../../prisma/migrations/20261021010000_notification_reads/migration.sql", import.meta.url), "utf8");
+    await prisma.$executeRawUnsafe(migration.slice(migration.indexOf('INSERT INTO "NotificationRead"')));
+    expect(await prisma.notificationRead.findMany({ select: { userId: true, eventId: true } })).toEqual([{ userId: customerId, eventId: prior.id }]);
+  });
+  it("cannot acknowledge another account's notification", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    const event = await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED" } });
+    expect((await asUser(await customer(), () => readNotifications(json({ ids: [event.id] }, "PATCH")))).status).toBe(200);
+    expect(await prisma.notificationRead.count()).toBe(0);
+    expect((await (await asUser(customerId, notifications)).json()).unread).toBe(1);
+  });
   it("loads only the selected booking and hides it from strangers", async () => {
     const profile = await chef(); const customerId = await customer();
     const booking = await seedBooking(customerId, profile.userId);
@@ -149,7 +168,7 @@ describe("private booking notifications", () => {
     expect(await (await asUser(customerId, summary)).json()).toEqual({ hasUnread: true });
     expect(await (await asUser(profile.userId, summary)).json()).toEqual({ hasUnread: false });
     const feed = await (await asUser(customerId, notifications)).json();
-    await asUser(customerId, () => readNotifications(json({ through: feed.through }, "PATCH")));
+    await asUser(customerId, () => readNotifications(json({ ids: feed.items.map((item: { id: string }) => item.id) }, "PATCH")));
     expect(await (await asUser(customerId, summary)).json()).toEqual({ hasUnread: false });
   });
   it("only shows the other party's events and never exposes contact details", async () => {
@@ -175,19 +194,20 @@ describe("private booking notifications", () => {
     expect(strangerFeed).toMatchObject({ items: [], unread: 0 });
   });
 
-  it("keeps later arrivals unread and never moves the read boundary backward", async () => {
+  it("keeps earlier-timestamped arrivals unread and retries acknowledgements safely", async () => {
     const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
     const oldTime = new Date(Date.now() - 60_000);
     await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED", createdAt: oldTime } });
     const feed = await (await asUser(customerId, notifications)).json();
-    const later = new Date(Date.parse(feed.through) + 1);
+    const later = new Date(oldTime.getTime() - 1_000);
     await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "CANCELLED", createdAt: later } });
-    expect((await asUser(customerId, () => readNotifications(json({ through: feed.through }, "PATCH")))).status).toBe(200);
-    await asUser(customerId, () => readNotifications(json({ through: oldTime.toISOString() }, "PATCH")));
-    expect((await prisma.user.findUniqueOrThrow({ where: { id: customerId } })).notificationsReadAt?.toISOString()).toBe(feed.through);
+    const ids = feed.items.map((item: { id: string }) => item.id);
+    expect((await asUser(customerId, () => readNotifications(json({ ids }, "PATCH")))).status).toBe(200);
+    await asUser(customerId, () => readNotifications(json({ ids }, "PATCH")));
+    expect(await prisma.notificationRead.count({ where: { userId: customerId } })).toBe(1);
     const next = await (await asUser(customerId, notifications)).json();
     expect(next.unread).toBe(1);
-    expect((await prisma.user.findUniqueOrThrow({ where: { id: profile.userId } })).notificationsReadAt).toBeNull();
+    expect(await prisma.notificationRead.count({ where: { userId: profile.userId } })).toBe(0);
   });
 
   it("bounds the inbox while counting unread events beyond the visible page", async () => {
@@ -196,8 +216,42 @@ describe("private booking notifications", () => {
     const feed = await (await asUser(customerId, notifications)).json();
     expect(feed.items).toHaveLength(30);
     expect(feed.unread).toBe(35);
-    await asUser(customerId, () => readNotifications(json({ through: feed.through }, "PATCH")));
+    await asUser(customerId, () => readNotifications(json({ ids: feed.items.map((item: { id: string }) => item.id) }, "PATCH")));
+    const remaining = await (await asUser(customerId, notifications)).json();
+    expect(remaining.unread).toBe(5);
+    expect(remaining.items.filter((item: { unread: boolean }) => item.unread)).toHaveLength(5);
+    await asUser(customerId, () => readNotifications(json({ ids: remaining.items.filter((item: { unread: boolean }) => item.unread).map((item: { id: string }) => item.id) }, "PATCH")));
     expect((await (await asUser(customerId, notifications)).json()).unread).toBe(0);
+  });
+  it("does not acknowledge an event still uncommitted when the inbox was read", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId);
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "ACCEPTED" } });
+    let inserted!: () => void; let release!: () => void;
+    const ready = new Promise<void>((resolve) => { inserted = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    const producing = prisma.$transaction(async (tx) => {
+      await tx.bookingEvent.create({ data: { bookingId: booking.id, actorId: profile.userId, toStatus: "CANCELLED", createdAt: new Date(Date.now() - 60_000) } });
+      inserted(); await released;
+    }, { timeout: 15_000 });
+    await ready;
+    try {
+      const feed = await (await asUser(customerId, notifications)).json();
+      expect(feed.items).toHaveLength(1);
+      await asUser(customerId, () => readNotifications(json({ ids: feed.items.map((item: { id: string }) => item.id) }, "PATCH")));
+    } finally { release(); await producing; }
+    const next = await (await asUser(customerId, notifications)).json();
+    expect(next.unread).toBe(1);
+    expect(next.items[0]).toMatchObject({ title: "Booking cancelled", unread: true });
+  });
+  it("keeps automatic completion messages appropriate for each booking party", async () => {
+    const profile = await chef(); const customerId = await customer(); const booking = await seedBooking(customerId, profile.userId, "COMPLETED");
+    await prisma.bookingEvent.create({ data: { bookingId: booking.id, actorId: null, toStatus: "COMPLETED" } });
+    const chefFeed = await (await asUser(profile.userId, notifications)).json();
+    expect(chefFeed.items[0].title).toBe("Booking completed");
+    expect(chefFeed.items[0].message).toContain("The customer can now leave a review");
+    expect(chefFeed.items[0].message).toContain("automatically");
+    const customerFeed = await (await asUser(customerId, notifications)).json();
+    expect(customerFeed.items[0].message).toContain("You can now leave a review");
   });
 });
 

@@ -48,6 +48,7 @@ model User {
   reviewsWritten   Review[]  @relation("ReviewCustomer")
   reviewsReceived  Review[]  @relation("ReviewChef")
   reports Report[]
+  notificationReads NotificationRead[]
 }
 
 model Account {
@@ -189,8 +190,19 @@ model BookingEvent {
   createdAt  DateTime       @default(now())
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reads NotificationRead[]
 
   @@index([bookingId, createdAt])
+}
+
+model NotificationRead {
+  userId String
+  eventId String
+  readAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event BookingEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@id([userId, eventId])
+  @@index([eventId])
 }
 
 model Report {

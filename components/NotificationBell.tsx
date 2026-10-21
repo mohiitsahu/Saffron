@@ -75,7 +75,7 @@ export default function NotificationBell() {
     if (!feed || saving) return;
     setSaving(true);
     try {
-      const response = await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ through: feed.through }) });
+      const response = await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: feed.items.filter((item) => item.unread).map((item) => item.id) }) });
       if (!response.ok) throw new Error();
       await refresh(true, true);
     } catch { setError("Couldn’t mark updates as read. Please try again."); }
@@ -97,7 +97,7 @@ export default function NotificationBell() {
       </div>
       <div className="flex items-center justify-between gap-3 border-b border-leaf/10 px-5 py-2 text-sm">
         <button type="button" onClick={() => void refresh(true, true)} disabled={loading} className="min-h-11 rounded px-1 font-semibold text-leaf disabled:opacity-50">{loading ? "Updating…" : "Refresh"}</button>
-        <button type="button" onClick={() => void markRead()} disabled={!feed?.unread || saving || loading} className="min-h-11 rounded px-1 font-semibold text-leaf disabled:opacity-50">{saving ? "Saving…" : "Mark all as read"}</button>
+        <button type="button" onClick={() => void markRead()} disabled={!feed?.unread || saving || loading} className="min-h-11 rounded px-1 font-semibold text-leaf disabled:opacity-50">{saving ? "Saving…" : "Mark shown as read"}</button>
       </div>
       {error && <p role="status" className="bg-saffron/10 px-5 py-3 text-sm">{error}</p>}
       <div className="max-h-[calc(85dvh_-_210px)] overflow-y-auto overscroll-contain">
@@ -107,7 +107,7 @@ export default function NotificationBell() {
           <p className="flex items-center gap-2 font-semibold">{item.unread && <><span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-saffron" /><span className="sr-only">Unread: </span></>}{item.title}</p><p className="mt-1 text-sm leading-relaxed text-ink/75">{item.message}</p><time dateTime={item.createdAt} className="mt-2 block text-xs text-ink/60">{new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }).format(new Date(item.createdAt))} IST</time>
         </Link></li>)}</ul>
       </div>
-      <div className="border-t border-leaf/15 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 text-xs text-ink/60">Latest 30 updates · Refreshes every minute</div>
+      <div className="border-t border-leaf/15 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 text-xs text-ink/60">{feed?.unread ? `${feed.unread} unread · ` : ""}Unread first · Refreshes every minute</div>
     </dialog>, document.body)}
   </>;
 }

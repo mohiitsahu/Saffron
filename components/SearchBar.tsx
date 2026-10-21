@@ -70,9 +70,20 @@ export default function SearchBar({
   const qRef = useRef<HTMLInputElement>(null);
   const cityRef = useRef<HTMLInputElement>(null);
   const committedCity = useRef(initialCity);
+  const committedQuery = useRef(initialQ);
   const queryCallback = useRef(onQueryChange);
   queryCallback.current = onQueryChange;
-  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (initialQ === committedQuery.current) return;
+    committedQuery.current = initialQ;
+    setQ(initialQ);
+  }, [initialQ]);
+  useEffect(() => {
+    if (initialCity === committedCity.current) return;
+    committedCity.current = initialCity;
+    setCity(initialCity); setOpen(false); setActive(-1); setMessage("");
+  }, [initialCity]);
 
   useEffect(() => {
     setCanLocate("geolocation" in navigator);
@@ -80,12 +91,11 @@ export default function SearchBar({
 
   // Live search: wait 300 ms after the last keystroke, then update the results.
   useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    if (!queryCallback.current) return;
-    const timer = setTimeout(() => queryCallback.current?.(q.trim()), 300);
+    if (!queryCallback.current || q.trim() === committedQuery.current) return;
+    const timer = setTimeout(() => {
+      committedQuery.current = q.trim();
+      queryCallback.current?.(q.trim());
+    }, 300);
     return () => clearTimeout(timer);
   }, [q]);
 
@@ -187,6 +197,7 @@ export default function SearchBar({
   }
 
   function clearQuery() {
+    committedQuery.current = "";
     setQ("");
     queryCallback.current?.("");
     qRef.current?.focus();
@@ -217,11 +228,13 @@ export default function SearchBar({
     e.preventDefault();
     const value = city.trim();
     committedCity.current = value;
+    committedQuery.current = q.trim();
     setOpen(false);
     onSubmit(q.trim(), value);
   }
 
   function pickPopular(label: string) {
+    committedQuery.current = label;
     setQ(label);
     if (onQueryChange) onQueryChange(label);
     else onSubmit(label, city.trim());

@@ -216,13 +216,18 @@ subsequent requests. Verify upload/edit/reorder/delete and admin removal on stag
 
 Signed-in users have a notification bell with a desktop panel and mobile bottom
 sheet. It reads existing BookingEvent records, excludes the viewer's own actions,
-and shows the latest 30 updates. “Mark all as read” saves the current snapshot's
-time in User.notificationsReadAt without clearing later updates or other accounts.
+and shows up to 30 updates, with unread updates first. “Mark shown as read”
+acknowledges individual event IDs, so newly committed events remain unread even
+when their timestamp predates the inbox snapshot. Older unread events become
+visible as the displayed batch is marked read. Reads are scoped to the owner.
 The bell refreshes every minute while visible and when returning to the tab.
 While closed it only queries whether an unread event exists; the full inbox is
 loaded on opening. Focus/visibility checks are coalesced, and inbox links disable
 automatic prefetch so opening the panel does not fetch multiple booking pages.
-No new migration is needed when the existing discovery/proposals migration has
-been applied. Links open the selected booking, including older history, after
+Apply `20261021010000_notification_reads` with `npx prisma migrate deploy`, stop
+the app, regenerate Prisma with `npx prisma generate`, then restart it. This adds
+NotificationRead and preserves the previous read history; the old timestamp field
+is retained for migration compatibility but no longer used for acknowledgements.
+Links open the selected booking, including older history, after
 checking that the viewer is a party. Notifications never include booking addresses
 or phone numbers. These are in-app updates, not browser push notifications.
