@@ -6,6 +6,8 @@
 
 Search for chefs by city, cuisine, dish and budget, send a booking request, and let the chef accept or decline. Prices are in ₹ and customers pay the chef directly: Saffron never handles money.
 
+### 🔗 [Live demo: cheffron.netlify.app](https://cheffron.netlify.app/)
+
 ![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?logo=tailwindcss&logoColor=white)
@@ -238,6 +240,8 @@ types/          TypeScript type declarations
 - **Emails** are built in `lib/emailTemplates.ts` and sent from `lib/email.ts`.
 
 ## Deployment
+
+The app is deployed on Netlify at <https://cheffron.netlify.app/>.
 
 The Prisma schema already includes the `rhel-openssl-3.0.x` binary target needed on Netlify and similar serverless hosts.
 
